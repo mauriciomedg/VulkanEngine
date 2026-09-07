@@ -7,6 +7,7 @@
 namespace VulkanRender
 {
 
+class VulkanContext;
 class Window;
 
 class VULKAN_RENDER_API Renderer
@@ -22,6 +23,7 @@ public:
 
 private:
     std::unique_ptr<Window> m_window;
+    std::unique_ptr<VulkanContext> m_vulkanContext;
 };
 
 }

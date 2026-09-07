@@ -14,6 +14,8 @@ VulkanRenderDLL.dll
         |
         +-- GLFW
         |
+        +-- Vulkan instance, validation, debug messenger, surface
+        |
         +-- Vulkan implementation later
 ```
 
@@ -26,8 +28,9 @@ VulkanRenderDLL.dll
 - CMake
 - Git, used by CMake `FetchContent` to obtain GLFW
 - Windows SDK
+- Vulkan SDK
 
-The Vulkan SDK is not required for this milestone.
+This milestone creates a Vulkan instance and surface, so the Vulkan SDK must be installed and discoverable by CMake.
 
 ## Generate Project
 
@@ -63,19 +66,24 @@ Vulkan Mini Engine
 
 Closing the window shuts the application down cleanly.
 
+In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, and creates a `VkSurfaceKHR` for the GLFW window.
+
 ## Next Milestone
 
-The next Vulkan milestone should add this internal structure to `VulkanRenderDLL` while leaving the `VulkanSandbox` public-facing code unchanged:
+The next Vulkan milestone should enumerate physical devices while leaving the `VulkanSandbox` public-facing code unchanged:
 
 ```text
-Renderer
-   |
-   +-- Window
-   |
-   +-- VulkanContext
-          |
-          +-- VkInstance
-          +-- validation layers
-          +-- debug messenger
-          +-- VkSurfaceKHR
+Enumerate VkPhysicalDevice
+        |
+        v
+inspect GPU properties/features
+        |
+        v
+discover queue families
+        |
+        v
+verify graphics + presentation support
+        |
+        v
+select one GPU
 ```

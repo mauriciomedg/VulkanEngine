@@ -46,4 +46,9 @@ void Window::pollEvents() const
     glfwPollEvents();
 }
 
+GLFWwindow* Window::getNativeHandle() const
+{
+    return m_window;
+}
+
 }

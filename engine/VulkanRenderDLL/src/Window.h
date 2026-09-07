@@ -18,6 +18,7 @@ public:
 
     bool shouldClose() const;
     void pollEvents() const;
+    GLFWwindow* getNativeHandle() const;
 
 private:
     GLFWwindow* m_window = nullptr;

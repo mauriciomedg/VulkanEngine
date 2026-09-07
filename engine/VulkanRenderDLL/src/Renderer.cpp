@@ -1,5 +1,6 @@
 #include <VulkanRender/Renderer.h>
 
+#include "VulkanContext.h"
 #include "Window.h"
 
 namespace VulkanRender
@@ -7,6 +8,7 @@ namespace VulkanRender
 
 Renderer::Renderer()
     : m_window(std::make_unique<Window>(1280, 720, "Vulkan Mini Engine"))
+    , m_vulkanContext(std::make_unique<VulkanContext>(*m_window))
 {
 }
 
