@@ -48,6 +48,38 @@ std::string vulkanVersionToString(uint32_t version)
         std::to_string(VK_VERSION_PATCH(version));
 }
 
+const char* physicalDeviceTypeToString(VkPhysicalDeviceType type)
+{
+    switch (type)
+    {
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+        return "Discrete GPU";
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+        return "Integrated GPU";
+    case VK_PHYSICAL_DEVICE_TYPE_CPU:
+        return "CPU";
+    case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+        return "Virtual GPU";
+    case VK_PHYSICAL_DEVICE_TYPE_OTHER:
+        return "Other";
+    default:
+        return "Unknown";
+    }
+}
+
+int physicalDevicePreference(VkPhysicalDeviceType type)
+{
+    switch (type)
+    {
+    case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+        return 3;
+    case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+        return 2;
+    default:
+        return 1;
+    }
+}
+
 uint32_t chooseRequestedApiVersion(uint32_t runtimeVersion)
 {
     if (runtimeVersion >= VK_API_VERSION_1_3)
@@ -211,6 +243,7 @@ VulkanContext::VulkanContext(const Window& window)
     createInstance();
     createDebugMessenger();
     createSurface(window);
+    pickPhysicalDevice();
 }
 
 VulkanContext::~VulkanContext()
@@ -317,6 +350,132 @@ void VulkanContext::createSurface(const Window& window)
     }
 
     std::cout << "Vulkan surface created.\n";
+}
+
+void VulkanContext::pickPhysicalDevice()
+{
+    uint32_t deviceCount = 0;
+    VkResult result = vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to enumerate Vulkan physical devices");
+    }
+
+    if (deviceCount == 0)
+    {
+        throw std::runtime_error("No Vulkan-capable physical devices found");
+    }
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    result = vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to enumerate Vulkan physical devices");
+    }
+
+    std::cout << "\nFound " << deviceCount << " Vulkan physical device(s).\n";
+
+    int bestPreference = 0;
+    VkPhysicalDevice bestDevice = VK_NULL_HANDLE;
+    QueueFamilyIndices bestIndices;
+
+    for (uint32_t i = 0; i < deviceCount; ++i)
+    {
+        VkPhysicalDeviceProperties properties = {};
+        vkGetPhysicalDeviceProperties(devices[i], &properties);
+
+        std::cout << "\nGPU " << i << ":\n";
+        std::cout << "  " << properties.deviceName << '\n';
+        std::cout << "  type: " << physicalDeviceTypeToString(properties.deviceType) << '\n';
+        std::cout << "  Vulkan API: " << vulkanVersionToString(properties.apiVersion) << '\n';
+        std::cout << "  driver version: " << properties.driverVersion << '\n';
+
+        const bool suitable = isDeviceSuitable(devices[i]);
+        QueueFamilyIndices indices = findQueueFamilies(devices[i], true);
+
+        if (suitable)
+        {
+            const int preference = physicalDevicePreference(properties.deviceType);
+            if (preference > bestPreference)
+            {
+                bestPreference = preference;
+                bestDevice = devices[i];
+                bestIndices = indices;
+            }
+        }
+    }
+
+    if (bestDevice == VK_NULL_HANDLE)
+    {
+        throw std::runtime_error(
+            "No suitable Vulkan physical device found with graphics and presentation support");
+    }
+
+    m_physicalDevice = bestDevice;
+    m_queueFamilyIndices = bestIndices;
+
+    VkPhysicalDeviceProperties selectedProperties = {};
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &selectedProperties);
+
+    std::cout << "\nSelected physical device:\n";
+    std::cout << "  " << selectedProperties.deviceName << '\n';
+    std::cout << "Graphics queue family: " << *m_queueFamilyIndices.graphicsFamily << '\n';
+    std::cout << "Present queue family: " << *m_queueFamilyIndices.presentFamily << '\n';
+}
+
+QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device, bool logQueues) const
+{
+    QueueFamilyIndices indices;
+
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+    for (uint32_t i = 0; i < queueFamilyCount; ++i)
+    {
+        const VkQueueFamilyProperties& queueFamily = queueFamilies[i];
+
+        VkBool32 presentSupport = VK_FALSE;
+        const VkResult result =
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface, &presentSupport);
+        if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to query Vulkan physical device presentation support");
+        }
+
+        const bool graphicsSupport = (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0;
+        const bool computeSupport = (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
+        const bool transferSupport = (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT) != 0;
+
+        if (logQueues)
+        {
+            std::cout << "\n  queue family " << i << ":\n";
+            std::cout << "    count: " << queueFamily.queueCount << '\n';
+            std::cout << "    graphics: " << (graphicsSupport ? "yes" : "no") << '\n';
+            std::cout << "    compute: " << (computeSupport ? "yes" : "no") << '\n';
+            std::cout << "    transfer: " << (transferSupport ? "yes" : "no") << '\n';
+            std::cout << "    present: " << (presentSupport == VK_TRUE ? "yes" : "no") << '\n';
+        }
+
+        if (graphicsSupport && !indices.graphicsFamily.has_value())
+        {
+            indices.graphicsFamily = i;
+        }
+
+        if (presentSupport == VK_TRUE && !indices.presentFamily.has_value())
+        {
+            indices.presentFamily = i;
+        }
+    }
+
+    return indices;
+}
+
+bool VulkanContext::isDeviceSuitable(VkPhysicalDevice device) const
+{
+    return findQueueFamilies(device).isComplete();
 }
 
 }
