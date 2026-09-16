@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <utility>
 
 struct GLFWwindow;
 
@@ -18,6 +19,7 @@ public:
 
     bool shouldClose() const;
     void pollEvents() const;
+    std::pair<int, int> getFramebufferSize() const;
     GLFWwindow* getNativeHandle() const;
 
 private:

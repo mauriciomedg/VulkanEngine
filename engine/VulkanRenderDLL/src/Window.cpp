@@ -46,6 +46,14 @@ void Window::pollEvents() const
     glfwPollEvents();
 }
 
+std::pair<int, int> Window::getFramebufferSize() const
+{
+    int width = 0;
+    int height = 0;
+    glfwGetFramebufferSize(m_window, &width, &height);
+    return { width, height };
+}
+
 GLFWwindow* Window::getNativeHandle() const
 {
     return m_window;

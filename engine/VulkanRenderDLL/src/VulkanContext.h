@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 namespace VulkanRender
@@ -19,6 +20,13 @@ struct QueueFamilyIndices
     }
 };
 
+struct SwapchainSupportDetails
+{
+    VkSurfaceCapabilitiesKHR capabilities = {};
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+};
+
 class VulkanContext
 {
 public:
@@ -34,8 +42,20 @@ private:
     void createSurface(const Window& window);
     void pickPhysicalDevice();
     void createLogicalDevice();
+    void createSwapchain(const Window& window);
+    void createSwapchainImageViews();
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, bool logQueues = false) const;
     bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;
+    SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) const;
+    VkSurfaceFormatKHR chooseSwapSurfaceFormat(
+        const std::vector<VkSurfaceFormatKHR>& formats) const;
+    VkPresentModeKHR chooseSwapPresentMode(
+        const std::vector<VkPresentModeKHR>& presentModes) const;
+    VkExtent2D chooseSwapExtent(
+        const VkSurfaceCapabilitiesKHR& capabilities,
+        const Window& window) const;
+    VkCompositeAlphaFlagBitsKHR chooseCompositeAlpha(
+        VkCompositeAlphaFlagsKHR supportedCompositeAlpha) const;
     bool isDeviceSuitable(VkPhysicalDevice device) const;
 
     VkInstance m_instance = VK_NULL_HANDLE;
@@ -46,6 +66,11 @@ private:
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
     QueueFamilyIndices m_queueFamilyIndices;
+    VkSwapchainKHR m_swapchain = VK_NULL_HANDLE;
+    std::vector<VkImage> m_swapchainImages;
+    std::vector<VkImageView> m_swapchainImageViews;
+    VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
+    VkExtent2D m_swapchainExtent = {};
 };
 
 }
