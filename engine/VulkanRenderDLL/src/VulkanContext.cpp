@@ -296,10 +296,46 @@ VulkanContext::VulkanContext(const Window& window)
     createLogicalDevice();
     createSwapchain(window);
     createSwapchainImageViews();
+    createCommandPool();
+    createCommandBuffers();
+    createSyncObjects();
 }
 
 VulkanContext::~VulkanContext()
 {
+    if (m_device != VK_NULL_HANDLE)
+    {
+        vkDeviceWaitIdle(m_device);
+    }
+
+    for (size_t i = 0; i < m_imageAvailableSemaphores.size(); ++i)
+    {
+        if (m_imageAvailableSemaphores[i] != VK_NULL_HANDLE)
+        {
+            vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
+        }
+
+        if (m_renderFinishedSemaphores[i] != VK_NULL_HANDLE)
+        {
+            vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
+        }
+
+        if (m_inFlightFences[i] != VK_NULL_HANDLE)
+        {
+            vkDestroyFence(m_device, m_inFlightFences[i], nullptr);
+        }
+    }
+    m_imageAvailableSemaphores.clear();
+    m_renderFinishedSemaphores.clear();
+    m_inFlightFences.clear();
+
+    if (m_commandPool != VK_NULL_HANDLE)
+    {
+        vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+        m_commandPool = VK_NULL_HANDLE;
+        m_commandBuffers.clear();
+    }
+
     for (VkImageView imageView : m_swapchainImageViews)
     {
         vkDestroyImageView(m_device, imageView, nullptr);
@@ -311,6 +347,7 @@ VulkanContext::~VulkanContext()
         vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
         m_swapchain = VK_NULL_HANDLE;
         m_swapchainImages.clear();
+        m_swapchainImageLayouts.clear();
         m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
         m_swapchainExtent = {};
     }
@@ -340,6 +377,116 @@ VulkanContext::~VulkanContext()
         vkDestroyInstance(m_instance, nullptr);
         m_instance = VK_NULL_HANDLE;
     }
+}
+
+void VulkanContext::drawFrame()
+{
+    const VkResult waitResult =
+        vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    if (waitResult != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to wait for Vulkan in-flight frame fence");
+    }
+
+    uint32_t imageIndex = 0;
+    const VkResult acquireResult = vkAcquireNextImageKHR(
+        m_device,
+        m_swapchain,
+        UINT64_MAX,
+        m_imageAvailableSemaphores[m_currentFrame],
+        VK_NULL_HANDLE,
+        &imageIndex);
+
+    if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        throw std::runtime_error("Vulkan swapchain is out of date; recreation is not implemented yet");
+    }
+
+    if (acquireResult == VK_SUBOPTIMAL_KHR)
+    {
+        if (!m_loggedSuboptimalSwapchain)
+        {
+            std::cout << "Vulkan swapchain is suboptimal; resize handling is not implemented yet.\n";
+            m_loggedSuboptimalSwapchain = true;
+        }
+    }
+    else if (acquireResult != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to acquire Vulkan swapchain image");
+    }
+
+    VkResult result = vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to reset Vulkan in-flight frame fence");
+    }
+
+    result = vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to reset Vulkan command buffer");
+    }
+
+    recordCommandBuffer(m_commandBuffers[m_currentFrame], imageIndex);
+
+    VkSemaphore waitSemaphores[] = {
+        m_imageAvailableSemaphores[m_currentFrame]
+    };
+    VkPipelineStageFlags waitStages[] = {
+        VK_PIPELINE_STAGE_TRANSFER_BIT
+    };
+    VkSemaphore signalSemaphores[] = {
+        m_renderFinishedSemaphores[m_currentFrame]
+    };
+
+    VkSubmitInfo submitInfo = {};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = waitSemaphores;
+    submitInfo.pWaitDstStageMask = waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &m_commandBuffers[m_currentFrame];
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = signalSemaphores;
+
+    result = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to submit Vulkan frame commands");
+    }
+
+    VkSwapchainKHR swapchains[] = {
+        m_swapchain
+    };
+
+    VkPresentInfoKHR presentInfo = {};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = signalSemaphores;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = swapchains;
+    presentInfo.pImageIndices = &imageIndex;
+
+    const VkResult presentResult = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    if (presentResult == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        throw std::runtime_error("Vulkan swapchain is out of date after presentation; recreation is not implemented yet");
+    }
+
+    if (presentResult == VK_SUBOPTIMAL_KHR)
+    {
+        if (!m_loggedSuboptimalSwapchain)
+        {
+            std::cout << "Vulkan swapchain is suboptimal; resize handling is not implemented yet.\n";
+            m_loggedSuboptimalSwapchain = true;
+        }
+    }
+    else if (presentResult != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to present Vulkan swapchain image");
+    }
+
+    m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void VulkanContext::createInstance()
@@ -632,6 +779,12 @@ void VulkanContext::createSwapchain(const Window& window)
     std::cout << "Requested swapchain image count:\n";
     std::cout << "  " << imageCount << '\n';
 
+    if ((support.capabilities.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0)
+    {
+        throw std::runtime_error(
+            "Selected Vulkan surface does not support transfer-destination swapchain images");
+    }
+
     VkSwapchainCreateInfoKHR createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     createInfo.surface = m_surface;
@@ -640,7 +793,9 @@ void VulkanContext::createSwapchain(const Window& window)
     createInfo.imageColorSpace = surfaceFormat.colorSpace;
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    createInfo.imageUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     const std::array<uint32_t, 2> queueFamilyIndices = {
         *m_queueFamilyIndices.graphicsFamily,
@@ -693,8 +848,10 @@ void VulkanContext::createSwapchain(const Window& window)
 
     m_swapchainImageFormat = surfaceFormat.format;
     m_swapchainExtent = extent;
+    m_swapchainImageLayouts.assign(m_swapchainImages.size(), VK_IMAGE_LAYOUT_UNDEFINED);
 
     std::cout << "Retrieved " << m_swapchainImages.size() << " swapchain images.\n";
+    std::cout << "Swapchain image usage: COLOR_ATTACHMENT | TRANSFER_DST.\n";
 }
 
 void VulkanContext::createSwapchainImageViews()
@@ -727,6 +884,169 @@ void VulkanContext::createSwapchainImageViews()
     }
 
     std::cout << "Created " << m_swapchainImageViews.size() << " swapchain image views.\n";
+}
+
+void VulkanContext::createCommandPool()
+{
+    VkCommandPoolCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    createInfo.queueFamilyIndex = *m_queueFamilyIndices.graphicsFamily;
+
+    const VkResult result =
+        vkCreateCommandPool(m_device, &createInfo, nullptr, &m_commandPool);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create Vulkan command pool");
+    }
+
+    std::cout << "Command pool created.\n";
+}
+
+void VulkanContext::createCommandBuffers()
+{
+    m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+    VkCommandBufferAllocateInfo allocationInfo = {};
+    allocationInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocationInfo.commandPool = m_commandPool;
+    allocationInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocationInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+
+    const VkResult result =
+        vkAllocateCommandBuffers(m_device, &allocationInfo, m_commandBuffers.data());
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate Vulkan command buffers");
+    }
+
+    std::cout << "Allocated " << m_commandBuffers.size() << " command buffers.\n";
+}
+
+void VulkanContext::createSyncObjects()
+{
+    m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT, VK_NULL_HANDLE);
+    m_renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT, VK_NULL_HANDLE);
+    m_inFlightFences.resize(MAX_FRAMES_IN_FLIGHT, VK_NULL_HANDLE);
+
+    VkSemaphoreCreateInfo semaphoreInfo = {};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo = {};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        const VkResult imageAvailableResult = vkCreateSemaphore(
+            m_device,
+            &semaphoreInfo,
+            nullptr,
+            &m_imageAvailableSemaphores[i]);
+        const VkResult renderFinishedResult = vkCreateSemaphore(
+            m_device,
+            &semaphoreInfo,
+            nullptr,
+            &m_renderFinishedSemaphores[i]);
+        const VkResult fenceResult =
+            vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFences[i]);
+
+        if (imageAvailableResult != VK_SUCCESS ||
+            renderFinishedResult != VK_SUCCESS ||
+            fenceResult != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create Vulkan frame synchronization objects");
+        }
+    }
+
+    std::cout << "Created frame synchronization objects.\n";
+}
+
+void VulkanContext::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    VkResult result = vkBeginCommandBuffer(commandBuffer, &beginInfo);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to begin Vulkan command buffer recording");
+    }
+
+    VkImageSubresourceRange colorRange = {};
+    colorRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    colorRange.baseMipLevel = 0;
+    colorRange.levelCount = 1;
+    colorRange.baseArrayLayer = 0;
+    colorRange.layerCount = 1;
+
+    VkImageMemoryBarrier transferBarrier = {};
+    transferBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    transferBarrier.srcAccessMask = 0;
+    transferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    transferBarrier.oldLayout = m_swapchainImageLayouts[imageIndex];
+    transferBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    transferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    transferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    transferBarrier.image = m_swapchainImages[imageIndex];
+    transferBarrier.subresourceRange = colorRange;
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        1,
+        &transferBarrier);
+
+    VkClearColorValue clearColor = {};
+    clearColor.float32[0] = 0.05f;
+    clearColor.float32[1] = 0.10f;
+    clearColor.float32[2] = 0.20f;
+    clearColor.float32[3] = 1.0f;
+
+    vkCmdClearColorImage(
+        commandBuffer,
+        m_swapchainImages[imageIndex],
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        &clearColor,
+        1,
+        &colorRange);
+
+    VkImageMemoryBarrier presentBarrier = {};
+    presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    presentBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    presentBarrier.dstAccessMask = 0;
+    presentBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    presentBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    presentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    presentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    presentBarrier.image = m_swapchainImages[imageIndex];
+    presentBarrier.subresourceRange = colorRange;
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        1,
+        &presentBarrier);
+
+    result = vkEndCommandBuffer(commandBuffer);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to record Vulkan command buffer");
+    }
+
+    m_swapchainImageLayouts[imageIndex] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 }
 
 QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device, bool logQueues) const

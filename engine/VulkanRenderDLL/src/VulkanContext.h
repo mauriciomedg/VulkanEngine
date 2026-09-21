@@ -36,7 +36,11 @@ public:
     VulkanContext(const VulkanContext&) = delete;
     VulkanContext& operator=(const VulkanContext&) = delete;
 
+    void drawFrame();
+
 private:
+    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+
     void createInstance();
     void createDebugMessenger();
     void createSurface(const Window& window);
@@ -44,6 +48,10 @@ private:
     void createLogicalDevice();
     void createSwapchain(const Window& window);
     void createSwapchainImageViews();
+    void createCommandPool();
+    void createCommandBuffers();
+    void createSyncObjects();
+    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, bool logQueues = false) const;
     bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;
     SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) const;
@@ -71,6 +79,14 @@ private:
     std::vector<VkImageView> m_swapchainImageViews;
     VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
     VkExtent2D m_swapchainExtent = {};
+    std::vector<VkImageLayout> m_swapchainImageLayouts;
+    VkCommandPool m_commandPool = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> m_commandBuffers;
+    std::vector<VkSemaphore> m_imageAvailableSemaphores;
+    std::vector<VkSemaphore> m_renderFinishedSemaphores;
+    std::vector<VkFence> m_inFlightFences;
+    uint32_t m_currentFrame = 0;
+    bool m_loggedSuboptimalSwapchain = false;
 };
 
 }
