@@ -48,12 +48,15 @@ private:
     void createLogicalDevice();
     void createSwapchain(const Window& window);
     void createSwapchainImageViews();
+    void createGraphicsPipeline();
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+    VkShaderModule createShaderModule(const std::vector<char>& code) const;
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, bool logQueues = false) const;
     bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;
+    bool supportsDynamicRendering(VkPhysicalDevice device) const;
     SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) const;
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(
         const std::vector<VkSurfaceFormatKHR>& formats) const;
@@ -80,6 +83,8 @@ private:
     VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
     VkExtent2D m_swapchainExtent = {};
     std::vector<VkImageLayout> m_swapchainImageLayouts;
+    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+    VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
     std::vector<VkSemaphore> m_imageAvailableSemaphores;

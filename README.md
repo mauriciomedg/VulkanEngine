@@ -30,7 +30,7 @@ VulkanRenderDLL.dll
 - Windows SDK
 - Vulkan SDK
 
-This milestone creates a Vulkan instance and surface, so the Vulkan SDK must be installed and discoverable by CMake.
+This project uses Vulkan dynamic rendering for the first graphics pipeline milestone, so the Vulkan SDK must be installed and discoverable by CMake. The build also uses the Vulkan SDK `glslc` compiler to generate SPIR-V shaders.
 
 ## Generate Project
 
@@ -58,32 +58,40 @@ VulkanSandbox
 
 ## Expected Result
 
-Running the application opens an empty `1280 x 720` window named:
+Running the application opens a `1280 x 720` window named:
 
 ```text
 Vulkan Mini Engine
 ```
 
-Closing the window shuts the application down cleanly.
+The renderer clears the swapchain image and draws one interpolated-color triangle using a Vulkan graphics pipeline. Closing the window shuts the application down cleanly.
 
-In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, and creates a `VkSurfaceKHR` for the GLFW window.
+In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, verifies and enables dynamic rendering, and creates the Vulkan surface, swapchain, command resources, synchronization objects, and graphics pipeline.
 
 ## Next Milestone
 
-The next Vulkan milestone should enumerate physical devices while leaving the `VulkanSandbox` public-facing code unchanged:
+The next Vulkan milestone should introduce real vertex and index buffers while leaving the `VulkanSandbox` public-facing code unchanged:
 
 ```text
-Enumerate VkPhysicalDevice
+Create a VkBuffer for vertices
         |
         v
-inspect GPU properties/features
+allocate and bind Vulkan memory
         |
         v
-discover queue families
+upload quad vertex data
         |
         v
-verify graphics + presentation support
+create an index buffer
         |
         v
-select one GPU
+bind vertex and index buffers
+        |
+        v
+vkCmdDrawIndexed
+        |
+        v
+render a quad
 ```
+
+That milestone should be the first introduction to Vulkan buffer memory and explicit GPU memory management.
