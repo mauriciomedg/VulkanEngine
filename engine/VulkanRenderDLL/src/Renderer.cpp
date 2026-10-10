@@ -1,6 +1,6 @@
 #include <VulkanRender/Renderer.h>
 
-#include "VulkanContext.h"
+#include "RenderingManager.h"
 #include "Window.h"
 
 #include <iostream>
@@ -10,7 +10,7 @@ namespace VulkanRender
 
 Renderer::Renderer()
     : m_window(std::make_unique<Window>(1280, 720, "Vulkan Mini Engine"))
-    , m_vulkanContext(std::make_unique<VulkanContext>(*m_window))
+    , m_renderingManager(std::make_unique<RenderingManager>(*m_window))
 {
 }
 
@@ -23,7 +23,7 @@ void Renderer::run()
     while (!m_window->shouldClose())
     {
         m_window->pollEvents();
-        m_vulkanContext->drawFrame();
+        m_renderingManager->renderFrame();
     }
 }
 

@@ -12,14 +12,28 @@ VulkanRenderDLL.dll
         |
         +-- Window
         |
-        +-- GLFW
+        +-- Renderer
         |
-        +-- Vulkan instance, validation, debug messenger, surface
+        +-- RenderingManager
         |
-        +-- Vulkan swapchain, pipeline, and mesh buffers
+        +-- OpaquePass
+        |
+        +-- GraphicsManager
+        |
+        +-- VulkanContext
+        |
+        +-- GLFW + Vulkan
 ```
 
 `VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `VulkanRenderDLL` behind that same boundary.
+
+`VulkanContext` owns low-level Vulkan environment state: instance, validation, surface, physical/logical device, queues, swapchain, images, image views, format, extent, and swapchain image layouts.
+
+`GraphicsManager` owns GPU communication resources: the static quad vertex/index buffers and memory, command pool, command buffers, frame semaphores, fences, memory type selection, buffer creation, and graphics queue submission.
+
+`OpaquePass` owns the opaque graphics pipeline and pipeline layout, then records dynamic rendering, viewport/scissor setup, mesh buffer binding, and indexed drawing.
+
+`RenderingManager` owns the frame sequence: acquire swapchain image, reset frame resources, transition image layouts, execute `OpaquePass`, submit, present, and advance the frame.
 
 ## Prerequisites
 
@@ -86,3 +100,15 @@ render dynamic deforming geometry
 ```
 
 After that, replace the synthetic vertex updates with real PhysiK surface positions and display the live soft-body simulation.
+
+The intended future pass order is:
+
+```text
+ShadowPass
+        |
+        v
+OpaquePass
+        |
+        v
+OverlayPass
+```

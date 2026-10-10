@@ -36,11 +36,21 @@ public:
     VulkanContext(const VulkanContext&) = delete;
     VulkanContext& operator=(const VulkanContext&) = delete;
 
-    void drawFrame();
+    VkPhysicalDevice getPhysicalDevice() const;
+    VkDevice getDevice() const;
+    VkQueue getGraphicsQueue() const;
+    VkQueue getPresentQueue() const;
+    VkSwapchainKHR getSwapchain() const;
+    VkFormat getSwapchainImageFormat() const;
+    VkExtent2D getSwapchainExtent() const;
+    VkImage getSwapchainImage(uint32_t imageIndex) const;
+    VkImageView getSwapchainImageView(uint32_t imageIndex) const;
+    VkImageLayout getSwapchainImageLayout(uint32_t imageIndex) const;
+    void setSwapchainImageLayout(uint32_t imageIndex, VkImageLayout layout);
+    size_t getSwapchainImageCount() const;
+    uint32_t getGraphicsQueueFamily() const;
 
 private:
-    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-
     void createInstance();
     void createDebugMessenger();
     void createSurface(const Window& window);
@@ -48,23 +58,6 @@ private:
     void createLogicalDevice();
     void createSwapchain(const Window& window);
     void createSwapchainImageViews();
-    void createGraphicsPipeline();
-    void createVertexBuffer();
-    void createIndexBuffer();
-    void createCommandPool();
-    void createCommandBuffers();
-    void createSyncObjects();
-    void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    VkShaderModule createShaderModule(const std::vector<char>& code) const;
-    uint32_t findMemoryType(
-        uint32_t typeFilter,
-        VkMemoryPropertyFlags properties) const;
-    void createBuffer(
-        VkDeviceSize size,
-        VkBufferUsageFlags usage,
-        VkMemoryPropertyFlags properties,
-        VkBuffer& buffer,
-        VkDeviceMemory& bufferMemory);
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, bool logQueues = false) const;
     bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;
     bool supportsDynamicRendering(VkPhysicalDevice device) const;
@@ -94,20 +87,6 @@ private:
     VkFormat m_swapchainImageFormat = VK_FORMAT_UNDEFINED;
     VkExtent2D m_swapchainExtent = {};
     std::vector<VkImageLayout> m_swapchainImageLayouts;
-    VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
-    VkBuffer m_vertexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
-    VkBuffer m_indexBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_indexBufferMemory = VK_NULL_HANDLE;
-    uint32_t m_indexCount = 0;
-    VkCommandPool m_commandPool = VK_NULL_HANDLE;
-    std::vector<VkCommandBuffer> m_commandBuffers;
-    std::vector<VkSemaphore> m_imageAvailableSemaphores;
-    std::vector<VkSemaphore> m_renderFinishedSemaphores;
-    std::vector<VkFence> m_inFlightFences;
-    uint32_t m_currentFrame = 0;
-    bool m_loggedSuboptimalSwapchain = false;
 };
 
 }
