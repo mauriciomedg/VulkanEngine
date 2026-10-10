@@ -16,10 +16,10 @@ VulkanRenderDLL.dll
         |
         +-- Vulkan instance, validation, debug messenger, surface
         |
-        +-- Vulkan implementation later
+        +-- Vulkan swapchain, pipeline, and mesh buffers
 ```
 
-`VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing is owned by `VulkanRenderDLL`, and Vulkan objects will be added behind that same boundary in a later milestone.
+`VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `VulkanRenderDLL` behind that same boundary.
 
 ## Prerequisites
 
@@ -64,34 +64,25 @@ Running the application opens a `1280 x 720` window named:
 Vulkan Mini Engine
 ```
 
-The renderer clears the swapchain image and draws one interpolated-color triangle using a Vulkan graphics pipeline. Closing the window shuts the application down cleanly.
+The renderer clears the swapchain image and draws one indexed, interpolated-color quad using a Vulkan graphics pipeline, vertex buffer, and index buffer. Closing the window shuts the application down cleanly.
 
-In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, verifies and enables dynamic rendering, and creates the Vulkan surface, swapchain, command resources, synchronization objects, and graphics pipeline.
+In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, verifies and enables dynamic rendering, and creates the Vulkan surface, swapchain, command resources, synchronization objects, graphics pipeline, and static quad buffers.
 
 ## Next Milestone
 
-The next Vulkan milestone should introduce real vertex and index buffers while leaving the `VulkanSandbox` public-facing code unchanged:
+The next Vulkan milestone should introduce safe dynamic vertex updates while leaving the `VulkanSandbox` public-facing code unchanged:
 
 ```text
-Create a VkBuffer for vertices
+Keep vertex memory persistently mapped
         |
         v
-allocate and bind Vulkan memory
+update vertex positions every frame
         |
         v
-upload quad vertex data
+use per-frame vertex storage or safe synchronization
         |
         v
-create an index buffer
-        |
-        v
-bind vertex and index buffers
-        |
-        v
-vkCmdDrawIndexed
-        |
-        v
-render a quad
+render dynamic deforming geometry
 ```
 
-That milestone should be the first introduction to Vulkan buffer memory and explicit GPU memory management.
+After that, replace the synthetic vertex updates with real PhysiK surface positions and display the live soft-body simulation.

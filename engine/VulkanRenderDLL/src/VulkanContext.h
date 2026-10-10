@@ -49,11 +49,22 @@ private:
     void createSwapchain(const Window& window);
     void createSwapchainImageViews();
     void createGraphicsPipeline();
+    void createVertexBuffer();
+    void createIndexBuffer();
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     VkShaderModule createShaderModule(const std::vector<char>& code) const;
+    uint32_t findMemoryType(
+        uint32_t typeFilter,
+        VkMemoryPropertyFlags properties) const;
+    void createBuffer(
+        VkDeviceSize size,
+        VkBufferUsageFlags usage,
+        VkMemoryPropertyFlags properties,
+        VkBuffer& buffer,
+        VkDeviceMemory& bufferMemory);
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device, bool logQueues = false) const;
     bool checkDeviceExtensionSupport(VkPhysicalDevice device) const;
     bool supportsDynamicRendering(VkPhysicalDevice device) const;
@@ -85,6 +96,11 @@ private:
     std::vector<VkImageLayout> m_swapchainImageLayouts;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
+    VkBuffer m_vertexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_vertexBufferMemory = VK_NULL_HANDLE;
+    VkBuffer m_indexBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_indexBufferMemory = VK_NULL_HANDLE;
+    uint32_t m_indexCount = 0;
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
     std::vector<VkSemaphore> m_imageAvailableSemaphores;

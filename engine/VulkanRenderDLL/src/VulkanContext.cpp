@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -30,6 +31,24 @@ constexpr std::array<const char*, 1> kDeviceExtensions = {
 };
 
 const std::filesystem::path kShaderDirectory = VULKAN_RENDER_SHADER_DIR;
+
+struct Vertex
+{
+    float position[2];
+    float color[3];
+};
+
+constexpr std::array<Vertex, 4> kQuadVertices = {{
+    {{-0.5f, -0.5f}, {1.0f, 0.1f, 0.1f}},
+    {{0.5f, -0.5f}, {0.1f, 1.0f, 0.1f}},
+    {{0.5f, 0.5f}, {0.1f, 0.3f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 0.1f}}
+}};
+
+constexpr std::array<uint32_t, 6> kQuadIndices = {
+    0, 1, 2,
+    2, 3, 0
+};
 
 #ifdef VULKAN_RENDER_ENABLE_VALIDATION_LAYERS
 constexpr bool kEnableValidationLayers = true;
@@ -327,6 +346,8 @@ VulkanContext::VulkanContext(const Window& window)
     createSwapchain(window);
     createSwapchainImageViews();
     createGraphicsPipeline();
+    createVertexBuffer();
+    createIndexBuffer();
     createCommandPool();
     createCommandBuffers();
     createSyncObjects();
@@ -385,6 +406,32 @@ VulkanContext::~VulkanContext()
         vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
         m_pipelineLayout = VK_NULL_HANDLE;
     }
+
+    if (m_indexBuffer != VK_NULL_HANDLE)
+    {
+        vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
+        m_indexBuffer = VK_NULL_HANDLE;
+    }
+
+    if (m_indexBufferMemory != VK_NULL_HANDLE)
+    {
+        vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
+        m_indexBufferMemory = VK_NULL_HANDLE;
+    }
+
+    if (m_vertexBuffer != VK_NULL_HANDLE)
+    {
+        vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
+        m_vertexBuffer = VK_NULL_HANDLE;
+    }
+
+    if (m_vertexBufferMemory != VK_NULL_HANDLE)
+    {
+        vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+        m_vertexBufferMemory = VK_NULL_HANDLE;
+    }
+
+    m_indexCount = 0;
 
     for (VkImageView imageView : m_swapchainImageViews)
     {
@@ -986,8 +1033,28 @@ void VulkanContext::createGraphicsPipeline()
 
     VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
     vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+
+    VkVertexInputBindingDescription bindingDescription = {};
+    bindingDescription.binding = 0;
+    bindingDescription.stride = sizeof(Vertex);
+    bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+    std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+    attributeDescriptions[0].binding = 0;
+    attributeDescriptions[0].location = 0;
+    attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[0].offset = offsetof(Vertex, position);
+
+    attributeDescriptions[1].binding = 0;
+    attributeDescriptions[1].location = 1;
+    attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+    attributeDescriptions[1].offset = offsetof(Vertex, color);
+
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+    vertexInputInfo.vertexAttributeDescriptionCount =
+        static_cast<uint32_t>(attributeDescriptions.size());
+    vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -1089,6 +1156,57 @@ void VulkanContext::createGraphicsPipeline()
     }
 
     std::cout << "Graphics pipeline created.\n";
+}
+
+void VulkanContext::createVertexBuffer()
+{
+    const VkDeviceSize bufferSize = sizeof(kQuadVertices[0]) * kQuadVertices.size();
+
+    createBuffer(
+        bufferSize,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_vertexBuffer,
+        m_vertexBufferMemory);
+
+    void* data = nullptr;
+    VkResult result = vkMapMemory(m_device, m_vertexBufferMemory, 0, bufferSize, 0, &data);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to map Vulkan vertex buffer memory");
+    }
+
+    std::memcpy(data, kQuadVertices.data(), static_cast<size_t>(bufferSize));
+    vkUnmapMemory(m_device, m_vertexBufferMemory);
+
+    std::cout << "Uploaded " << kQuadVertices.size()
+        << " quad vertices (" << bufferSize << " bytes).\n";
+}
+
+void VulkanContext::createIndexBuffer()
+{
+    const VkDeviceSize bufferSize = sizeof(kQuadIndices[0]) * kQuadIndices.size();
+
+    createBuffer(
+        bufferSize,
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        m_indexBuffer,
+        m_indexBufferMemory);
+
+    void* data = nullptr;
+    VkResult result = vkMapMemory(m_device, m_indexBufferMemory, 0, bufferSize, 0, &data);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to map Vulkan index buffer memory");
+    }
+
+    std::memcpy(data, kQuadIndices.data(), static_cast<size_t>(bufferSize));
+    vkUnmapMemory(m_device, m_indexBufferMemory);
+
+    m_indexCount = static_cast<uint32_t>(kQuadIndices.size());
+    std::cout << "Uploaded " << m_indexCount
+        << " quad indices (" << bufferSize << " bytes).\n";
 }
 
 void VulkanContext::createCommandPool()
@@ -1257,7 +1375,15 @@ void VulkanContext::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     scissor.extent = m_swapchainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    VkBuffer vertexBuffers[] = {
+        m_vertexBuffer
+    };
+    VkDeviceSize offsets[] = {
+        0
+    };
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+    vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(commandBuffer, m_indexCount, 1, 0, 0, 0);
 
     vkCmdEndRendering(commandBuffer);
 
@@ -1316,6 +1442,77 @@ VkShaderModule VulkanContext::createShaderModule(const std::vector<char>& code) 
     }
 
     return shaderModule;
+}
+
+uint32_t VulkanContext::findMemoryType(
+    uint32_t typeFilter,
+    VkMemoryPropertyFlags properties) const
+{
+    VkPhysicalDeviceMemoryProperties memoryProperties = {};
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memoryProperties);
+
+    for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+    {
+        const bool typeSupported = (typeFilter & (1u << i)) != 0;
+        const bool hasRequestedProperties =
+            (memoryProperties.memoryTypes[i].propertyFlags & properties) == properties;
+
+        if (typeSupported && hasRequestedProperties)
+        {
+            std::cout << "Selected Vulkan memory type " << i
+                << " for properties 0x" << std::hex << properties << std::dec << ".\n";
+            return i;
+        }
+    }
+
+    throw std::runtime_error("Failed to find a compatible Vulkan memory type");
+}
+
+void VulkanContext::createBuffer(
+    VkDeviceSize size,
+    VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties,
+    VkBuffer& buffer,
+    VkDeviceMemory& bufferMemory)
+{
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkResult result = vkCreateBuffer(m_device, &bufferInfo, nullptr, &buffer);
+    if (result != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create Vulkan buffer");
+    }
+
+    VkMemoryRequirements memoryRequirements = {};
+    vkGetBufferMemoryRequirements(m_device, buffer, &memoryRequirements);
+
+    VkMemoryAllocateInfo allocateInfo = {};
+    allocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocateInfo.allocationSize = memoryRequirements.size;
+    allocateInfo.memoryTypeIndex =
+        findMemoryType(memoryRequirements.memoryTypeBits, properties);
+
+    result = vkAllocateMemory(m_device, &allocateInfo, nullptr, &bufferMemory);
+    if (result != VK_SUCCESS)
+    {
+        vkDestroyBuffer(m_device, buffer, nullptr);
+        buffer = VK_NULL_HANDLE;
+        throw std::runtime_error("Failed to allocate Vulkan buffer memory");
+    }
+
+    result = vkBindBufferMemory(m_device, buffer, bufferMemory, 0);
+    if (result != VK_SUCCESS)
+    {
+        vkFreeMemory(m_device, bufferMemory, nullptr);
+        vkDestroyBuffer(m_device, buffer, nullptr);
+        bufferMemory = VK_NULL_HANDLE;
+        buffer = VK_NULL_HANDLE;
+        throw std::runtime_error("Failed to bind Vulkan buffer memory");
+    }
 }
 
 QueueFamilyIndices VulkanContext::findQueueFamilies(VkPhysicalDevice device, bool logQueues) const
