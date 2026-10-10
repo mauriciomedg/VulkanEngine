@@ -431,6 +431,7 @@ VulkanContext::~VulkanContext()
 
 void VulkanContext::drawFrame()
 {
+    // CPU waits until this fence become signaled
     const VkResult waitResult =
         vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
     if (waitResult != VK_SUCCESS)
@@ -438,13 +439,16 @@ void VulkanContext::drawFrame()
         throw std::runtime_error("Failed to wait for Vulkan in-flight frame fence");
     }
 
+    // give the index of the next image to start render into, this call can block the 
+    // CPU is the all swapchain image are busy
     uint32_t imageIndex = 0;
     const VkResult acquireResult = vkAcquireNextImageKHR(
         m_device,
         m_swapchain,
         UINT64_MAX,
-        m_imageAvailableSemaphores[m_currentFrame],
-        VK_NULL_HANDLE,
+        m_imageAvailableSemaphores[m_currentFrame], // when the acquired image is actually ready for GPU use, signal this semaphore.
+                                                    // That semaphore is later used by your graphics queue submission.
+        VK_NULL_HANDLE, // we use semafore so the fence argument is null
         &imageIndex);
 
     if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
@@ -465,12 +469,14 @@ void VulkanContext::drawFrame()
         throw std::runtime_error("Failed to acquire Vulkan swapchain image");
     }
 
-    VkResult result = vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]);
+    // Reset the fence to UNSIGNALED to be reuse, because the GPU put it in a SIGNALED state. 
+    VkResult result = vkResetFences(m_device, 1, &m_inFlightFences[m_currentFrame]); // the 1 means, reset one fence
     if (result != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to reset Vulkan in-flight frame fence");
     }
 
+    // Restore the current commandBuffer to the initial state to be reuse 
     result = vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
     if (result != VK_SUCCESS)
     {
@@ -489,6 +495,10 @@ void VulkanContext::drawFrame()
         m_renderFinishedSemaphores[imageIndex]
     };
 
+    // In general here we are describing the following steps: 
+    // - Wait for image available
+    // - execute rendering work
+    // - signal render finished
     VkSubmitInfo submitInfo = {};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.waitSemaphoreCount = 1;
@@ -1182,6 +1192,8 @@ void VulkanContext::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
     colorRange.baseArrayLayer = 0;
     colorRange.layerCount = 1;
 
+    // Whatever layout this image was in, after this barrier, the image is prepare for the upcoming operation that will write onto it as a color attachment.
+    // The fragment output will write into the swap image. In general the renderBarrier prepares the image as a render target
     VkImageMemoryBarrier renderBarrier = {};
     renderBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     renderBarrier.srcAccessMask = 0;
@@ -1249,6 +1261,8 @@ void VulkanContext::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t 
 
     vkCmdEndRendering(commandBuffer);
 
+    // Here the image transition from COLOR_ATTACHMENT_OPTIMAL to PRESENT_SRC_KHR
+    // That prepares the image to be presented 
     VkImageMemoryBarrier presentBarrier = {};
     presentBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
     presentBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
