@@ -2,6 +2,7 @@
 
 #include "MeshData.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 #include <vulkan/vulkan.h>
@@ -11,20 +12,25 @@ namespace VulkanRender
 
 class VulkanContext;
 
-class GraphicsManager
+class GraphicManager
 {
 public:
-    explicit GraphicsManager(VulkanContext& context);
-    ~GraphicsManager();
+    explicit GraphicManager(VulkanContext& context);
+    ~GraphicManager();
 
-    GraphicsManager(const GraphicsManager&) = delete;
-    GraphicsManager& operator=(const GraphicsManager&) = delete;
+    GraphicManager(const GraphicManager&) = delete;
+    GraphicManager& operator=(const GraphicManager&) = delete;
 
     VkCommandBuffer getCurrentCommandBuffer() const;
     VkSemaphore getImageAvailableSemaphore() const;
     VkSemaphore getRenderFinishedSemaphore(uint32_t imageIndex) const;
     VkFence getCurrentInFlightFence() const;
-    const MeshGpuData& getQuadMesh() const;
+    MeshGpuData createMesh(
+        const Vertex* vertices,
+        size_t vertexCount,
+        const uint32_t* indices,
+        size_t indexCount);
+    void destroyMesh(MeshGpuData& mesh);
 
     void waitForCurrentFrame() const;
     void resetCurrentFrameFence() const;
@@ -44,14 +50,11 @@ private:
         VkMemoryPropertyFlags properties,
         VkBuffer& buffer,
         VkDeviceMemory& bufferMemory);
-    void createQuadMesh();
-    void destroyMesh(MeshGpuData& mesh);
     void createCommandPool();
     void createCommandBuffers();
     void createSyncObjects();
 
     VulkanContext& m_context;
-    MeshGpuData m_quadMesh;
     VkCommandPool m_commandPool = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> m_commandBuffers;
     std::vector<VkSemaphore> m_imageAvailableSemaphores;

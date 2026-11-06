@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GraphicsManager.h"
+#include "GraphicManager.h"
 #include "OpaquePass.h"
 #include "VulkanContext.h"
 
@@ -33,8 +33,9 @@ private:
         VkPipelineStageFlags dstStage);
 
     VulkanContext m_context;
-    GraphicsManager m_graphics;
+    GraphicManager m_graphics;
     OpaquePass m_opaquePass;
+    MeshGpuData m_testMesh;
     bool m_loggedSuboptimalSwapchain = false;
 };
 

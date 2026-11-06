@@ -1,41 +1,23 @@
-#include "GraphicsManager.h"
+#include "GraphicManager.h"
 
 #include "VulkanContext.h"
 
-#include <array>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 
 namespace VulkanRender
 {
-namespace
-{
-
-constexpr std::array<Vertex, 4> kQuadVertices = {{
-    {{-0.5f, -0.5f}, {1.0f, 0.1f, 0.1f}},
-    {{0.5f, -0.5f}, {0.1f, 1.0f, 0.1f}},
-    {{0.5f, 0.5f}, {0.1f, 0.3f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 0.1f}}
-}};
-
-constexpr std::array<uint32_t, 6> kQuadIndices = {
-    0, 1, 2,
-    2, 3, 0
-};
-
-}
-
-GraphicsManager::GraphicsManager(VulkanContext& context)
+GraphicManager::GraphicManager(VulkanContext& context)
     : m_context(context)
 {
-    createQuadMesh();
     createCommandPool();
     createCommandBuffers();
     createSyncObjects();
 }
 
-GraphicsManager::~GraphicsManager()
+GraphicManager::~GraphicManager()
 {
     const VkDevice device = m_context.getDevice();
 
@@ -73,36 +55,29 @@ GraphicsManager::~GraphicsManager()
         m_commandPool = VK_NULL_HANDLE;
         m_commandBuffers.clear();
     }
-
-    destroyMesh(m_quadMesh);
 }
 
-VkCommandBuffer GraphicsManager::getCurrentCommandBuffer() const
+VkCommandBuffer GraphicManager::getCurrentCommandBuffer() const
 {
     return m_commandBuffers[m_currentFrame];
 }
 
-VkSemaphore GraphicsManager::getImageAvailableSemaphore() const
+VkSemaphore GraphicManager::getImageAvailableSemaphore() const
 {
     return m_imageAvailableSemaphores[m_currentFrame];
 }
 
-VkSemaphore GraphicsManager::getRenderFinishedSemaphore(uint32_t imageIndex) const
+VkSemaphore GraphicManager::getRenderFinishedSemaphore(uint32_t imageIndex) const
 {
     return m_renderFinishedSemaphores.at(imageIndex);
 }
 
-VkFence GraphicsManager::getCurrentInFlightFence() const
+VkFence GraphicManager::getCurrentInFlightFence() const
 {
     return m_inFlightFences[m_currentFrame];
 }
 
-const MeshGpuData& GraphicsManager::getQuadMesh() const
-{
-    return m_quadMesh;
-}
-
-void GraphicsManager::waitForCurrentFrame() const
+void GraphicManager::waitForCurrentFrame() const
 {
     const VkResult result = vkWaitForFences(
         m_context.getDevice(),
@@ -116,7 +91,7 @@ void GraphicsManager::waitForCurrentFrame() const
     }
 }
 
-void GraphicsManager::resetCurrentFrameFence() const
+void GraphicManager::resetCurrentFrameFence() const
 {
     const VkResult result =
         vkResetFences(m_context.getDevice(), 1, &m_inFlightFences[m_currentFrame]);
@@ -126,7 +101,7 @@ void GraphicsManager::resetCurrentFrameFence() const
     }
 }
 
-void GraphicsManager::resetCurrentCommandBuffer() const
+void GraphicManager::resetCurrentCommandBuffer() const
 {
     const VkResult result = vkResetCommandBuffer(m_commandBuffers[m_currentFrame], 0);
     if (result != VK_SUCCESS)
@@ -135,7 +110,7 @@ void GraphicsManager::resetCurrentCommandBuffer() const
     }
 }
 
-void GraphicsManager::submitCurrentFrame(uint32_t imageIndex) const
+void GraphicManager::submitCurrentFrame(uint32_t imageIndex) const
 {
     VkSemaphore waitSemaphores[] = {
         m_imageAvailableSemaphores[m_currentFrame]
@@ -170,12 +145,12 @@ void GraphicsManager::submitCurrentFrame(uint32_t imageIndex) const
     }
 }
 
-void GraphicsManager::advanceFrame()
+void GraphicManager::advanceFrame()
 {
     m_currentFrame = (m_currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-uint32_t GraphicsManager::findMemoryType(
+uint32_t GraphicManager::findMemoryType(
     uint32_t typeFilter,
     VkMemoryPropertyFlags properties) const
 {
@@ -199,7 +174,7 @@ uint32_t GraphicsManager::findMemoryType(
     throw std::runtime_error("Failed to find a compatible Vulkan memory type");
 }
 
-void GraphicsManager::createBuffer(
+void GraphicManager::createBuffer(
     VkDeviceSize size,
     VkBufferUsageFlags usage,
     VkMemoryPropertyFlags properties,
@@ -247,64 +222,91 @@ void GraphicsManager::createBuffer(
     }
 }
 
-void GraphicsManager::createQuadMesh()
+MeshGpuData GraphicManager::createMesh(
+    const Vertex* vertices,
+    size_t vertexCount,
+    const uint32_t* indices,
+    size_t indexCount)
 {
-    m_quadMesh.vertexBufferSize = sizeof(kQuadVertices[0]) * kQuadVertices.size();
-    createBuffer(
-        m_quadMesh.vertexBufferSize,
-        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        m_quadMesh.vertexBuffer,
-        m_quadMesh.vertexMemory);
-
-    void* vertexData = nullptr;
-    VkResult result = vkMapMemory(
-        m_context.getDevice(),
-        m_quadMesh.vertexMemory,
-        0,
-        m_quadMesh.vertexBufferSize,
-        0,
-        &vertexData);
-    if (result != VK_SUCCESS)
+    if (vertices == nullptr || indices == nullptr || vertexCount == 0 || indexCount == 0)
     {
-        throw std::runtime_error("Failed to map Vulkan vertex buffer memory");
+        throw std::invalid_argument("Mesh requires non-empty vertex and index data");
     }
 
-    std::memcpy(vertexData, kQuadVertices.data(), static_cast<size_t>(m_quadMesh.vertexBufferSize));
-    vkUnmapMemory(m_context.getDevice(), m_quadMesh.vertexMemory);
-
-    m_quadMesh.indexBufferSize = sizeof(kQuadIndices[0]) * kQuadIndices.size();
-    createBuffer(
-        m_quadMesh.indexBufferSize,
-        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-        m_quadMesh.indexBuffer,
-        m_quadMesh.indexMemory);
-
-    void* indexData = nullptr;
-    result = vkMapMemory(
-        m_context.getDevice(),
-        m_quadMesh.indexMemory,
-        0,
-        m_quadMesh.indexBufferSize,
-        0,
-        &indexData);
-    if (result != VK_SUCCESS)
+    if (vertexCount > (std::numeric_limits<size_t>::max)() / sizeof(Vertex) ||
+        indexCount > (std::numeric_limits<size_t>::max)() / sizeof(uint32_t) ||
+        indexCount > (std::numeric_limits<uint32_t>::max)())
     {
-        throw std::runtime_error("Failed to map Vulkan index buffer memory");
+        throw std::invalid_argument("Mesh counts exceed supported buffer or draw sizes");
     }
 
-    std::memcpy(indexData, kQuadIndices.data(), static_cast<size_t>(m_quadMesh.indexBufferSize));
-    vkUnmapMemory(m_context.getDevice(), m_quadMesh.indexMemory);
+    MeshGpuData mesh;
+    try
+    {
+        mesh.vertexBufferSize = sizeof(Vertex) * vertexCount;
+        createBuffer(
+            mesh.vertexBufferSize,
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            mesh.vertexBuffer,
+            mesh.vertexMemory);
 
-    m_quadMesh.indexCount = static_cast<uint32_t>(kQuadIndices.size());
-    std::cout << "Uploaded " << kQuadVertices.size()
-        << " quad vertices (" << m_quadMesh.vertexBufferSize << " bytes).\n";
-    std::cout << "Uploaded " << m_quadMesh.indexCount
-        << " quad indices (" << m_quadMesh.indexBufferSize << " bytes).\n";
+        void* vertexData = nullptr;
+        VkResult result = vkMapMemory(
+            m_context.getDevice(),
+            mesh.vertexMemory,
+            0,
+            mesh.vertexBufferSize,
+            0,
+            &vertexData);
+        if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to map Vulkan vertex buffer memory");
+        }
+
+        std::memcpy(vertexData, vertices, static_cast<size_t>(mesh.vertexBufferSize));
+        vkUnmapMemory(m_context.getDevice(), mesh.vertexMemory);
+
+        mesh.indexBufferSize = sizeof(uint32_t) * indexCount;
+        createBuffer(
+            mesh.indexBufferSize,
+            VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            mesh.indexBuffer,
+            mesh.indexMemory);
+
+        void* indexData = nullptr;
+        result = vkMapMemory(
+            m_context.getDevice(),
+            mesh.indexMemory,
+            0,
+            mesh.indexBufferSize,
+            0,
+            &indexData);
+        if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to map Vulkan index buffer memory");
+        }
+
+        std::memcpy(indexData, indices, static_cast<size_t>(mesh.indexBufferSize));
+        vkUnmapMemory(m_context.getDevice(), mesh.indexMemory);
+
+        mesh.indexCount = static_cast<uint32_t>(indexCount);
+    }
+    catch (...)
+    {
+        destroyMesh(mesh);
+        throw;
+    }
+
+    std::cout << "Uploaded " << vertexCount
+        << " mesh vertices (" << mesh.vertexBufferSize << " bytes).\n";
+    std::cout << "Uploaded " << mesh.indexCount
+        << " mesh indices (" << mesh.indexBufferSize << " bytes).\n";
+    return mesh;
 }
 
-void GraphicsManager::destroyMesh(MeshGpuData& mesh)
+void GraphicManager::destroyMesh(MeshGpuData& mesh)
 {
     const VkDevice device = m_context.getDevice();
 
@@ -337,7 +339,7 @@ void GraphicsManager::destroyMesh(MeshGpuData& mesh)
     mesh.indexCount = 0;
 }
 
-void GraphicsManager::createCommandPool()
+void GraphicManager::createCommandPool()
 {
     VkCommandPoolCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -354,7 +356,7 @@ void GraphicsManager::createCommandPool()
     std::cout << "Command pool created.\n";
 }
 
-void GraphicsManager::createCommandBuffers()
+void GraphicManager::createCommandBuffers()
 {
     m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
@@ -374,7 +376,7 @@ void GraphicsManager::createCommandBuffers()
     std::cout << "Allocated " << m_commandBuffers.size() << " command buffers.\n";
 }
 
-void GraphicsManager::createSyncObjects()
+void GraphicManager::createSyncObjects()
 {
     m_imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT, VK_NULL_HANDLE);
     m_renderFinishedSemaphores.resize(m_context.getSwapchainImageCount(), VK_NULL_HANDLE);

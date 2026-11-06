@@ -47,8 +47,8 @@ add_custom_target(VulkanRenderShaders
 add_library(VulkanRenderDLL SHARED
     include/VulkanRender/Export.h
     include/VulkanRender/Renderer.h
-    src/GraphicsManager.cpp
-    src/GraphicsManager.h
+    src/GraphicManager.cpp
+    src/GraphicManager.h
     src/MeshData.h
     src/OpaquePass.cpp
     src/OpaquePass.h

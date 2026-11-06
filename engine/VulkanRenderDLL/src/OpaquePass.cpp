@@ -1,6 +1,5 @@
 #include "OpaquePass.h"
 
-#include "GraphicsManager.h"
 #include "MeshData.h"
 #include "VulkanContext.h"
 
@@ -47,9 +46,8 @@ std::vector<char> readFile(const std::filesystem::path& filename)
 
 }
 
-OpaquePass::OpaquePass(VulkanContext& context, GraphicsManager& graphics)
+OpaquePass::OpaquePass(VulkanContext& context)
     : m_context(context)
-    , m_graphics(graphics)
 {
     createGraphicsPipeline();
 }
@@ -71,7 +69,10 @@ OpaquePass::~OpaquePass()
     }
 }
 
-void OpaquePass::record(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+void OpaquePass::record(
+    VkCommandBuffer commandBuffer,
+    uint32_t imageIndex,
+    const MeshGpuData& mesh)
 {
     VkClearColorValue clearColor = {};
     clearColor.float32[0] = 0.05f;
@@ -113,7 +114,6 @@ void OpaquePass::record(VkCommandBuffer commandBuffer, uint32_t imageIndex)
     scissor.extent = extent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-    const MeshGpuData& mesh = m_graphics.getQuadMesh();
     VkBuffer vertexBuffers[] = {
         mesh.vertexBuffer
     };

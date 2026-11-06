@@ -2,17 +2,39 @@
 
 #include "Window.h"
 
+#include <array>
 #include <iostream>
 #include <stdexcept>
 
 namespace VulkanRender
 {
+namespace
+{
+
+constexpr std::array<Vertex, 4> kQuadVertices = {{
+    {{-0.5f, -0.5f}, {1.0f, 0.1f, 0.1f}},
+    {{0.5f, -0.5f}, {0.1f, 1.0f, 0.1f}},
+    {{0.5f, 0.5f}, {0.1f, 0.3f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 0.1f}}
+}};
+
+constexpr std::array<uint32_t, 6> kQuadIndices = {
+    0, 1, 2,
+    2, 3, 0
+};
+
+}
 
 RenderingManager::RenderingManager(const Window& window)
     : m_context(window)
     , m_graphics(m_context)
-    , m_opaquePass(m_context, m_graphics)
+    , m_opaquePass(m_context)
 {
+    m_testMesh = m_graphics.createMesh(
+        kQuadVertices.data(),
+        kQuadVertices.size(),
+        kQuadIndices.data(),
+        kQuadIndices.size());
 }
 
 RenderingManager::~RenderingManager()
@@ -21,6 +43,7 @@ RenderingManager::~RenderingManager()
     if (device != VK_NULL_HANDLE)
     {
         vkDeviceWaitIdle(device);
+        m_graphics.destroyMesh(m_testMesh);
     }
 }
 
@@ -119,7 +142,7 @@ void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t image
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-    m_opaquePass.record(commandBuffer, imageIndex);
+    m_opaquePass.record(commandBuffer, imageIndex, m_testMesh);
 
     transitionSwapchainImage(
         commandBuffer,

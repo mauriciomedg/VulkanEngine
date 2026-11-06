@@ -5,35 +5,43 @@ A small Windows C++ learning project for building toward Vulkan one milestone at
 ## Architecture
 
 ```text
-VulkanSandbox.exe
-        |
-        v
-VulkanRenderDLL.dll
-        |
-        +-- Window
-        |
-        +-- Renderer
-        |
-        +-- RenderingManager
-        |
-        +-- OpaquePass
-        |
-        +-- GraphicsManager
-        |
-        +-- VulkanContext
-        |
-        +-- GLFW + Vulkan
+Renderer
+    |
+    +-- RenderingManager
+            |
+            +-- test MeshGpuData
+            +-- OpaquePass
+            +-- GraphicManager
+            |       +-- createMesh / destroyMesh
+            |       +-- command buffers / sync / submit
+            +-- VulkanContext
 ```
 
 `VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `VulkanRenderDLL` behind that same boundary.
 
 `VulkanContext` owns low-level Vulkan environment state: instance, validation, surface, physical/logical device, queues, swapchain, images, image views, format, extent, and swapchain image layouts.
 
-`GraphicsManager` owns GPU communication resources: the static quad vertex/index buffers and memory, command pool, command buffers, frame semaphores, fences, memory type selection, buffer creation, and graphics queue submission.
+`GraphicManager` provides generic GPU mesh creation and destruction using host-visible, coherent vertex/index buffers and the shared buffer allocation helpers. It owns the command pool, command buffers, frame semaphores, fences, and graphics queue submission resources.
 
-`OpaquePass` owns the opaque graphics pipeline and pipeline layout, then records dynamic rendering, viewport/scissor setup, mesh buffer binding, and indexed drawing.
+`OpaquePass` owns the opaque graphics pipeline and pipeline layout. Its `record` method receives a generic `const MeshGpuData&` and records dynamic rendering, viewport/scissor setup, mesh buffer binding, and indexed drawing.
 
-`RenderingManager` owns the frame sequence: acquire swapchain image, reset frame resources, transition image layouts, execute `OpaquePass`, submit, present, and advance the frame.
+`RenderingManager.cpp` contains the temporary CPU quad data (4 vertices and 6 uint32 indices). `RenderingManager` owns the uploaded `m_testMesh`, creates it after the graphics resources and pass are constructed, and destroys it after waiting for the device to become idle, before member teardown. It also owns the frame sequence: acquire swapchain image, reset frame resources, transition image layouts, execute `OpaquePass`, submit, present, and advance the frame.
+
+```text
+temporary CPU quad
+        |
+        v
+GraphicManager::createMesh
+        |
+        v
+MeshGpuData
+        |
+        v
+OpaquePass::record
+        |
+        v
+vkCmdDrawIndexed
+```
 
 ## Prerequisites
 
@@ -87,13 +95,13 @@ In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYE
 The next Vulkan milestone should introduce safe dynamic vertex updates while leaving the `VulkanSandbox` public-facing code unchanged:
 
 ```text
-Keep vertex memory persistently mapped
+Use persistently mapped, per-frame-safe vertex memory
         |
         v
 update vertex positions every frame
         |
         v
-use per-frame vertex storage or safe synchronization
+run an artificial deformation test
         |
         v
 render dynamic deforming geometry
