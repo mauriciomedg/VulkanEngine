@@ -57,6 +57,11 @@ GraphicManager::~GraphicManager()
     }
 }
 
+uint32_t GraphicManager::getCurrentFrameIndex() const
+{
+    return m_currentFrame;
+}
+
 VkCommandBuffer GraphicManager::getCurrentCommandBuffer() const
 {
     return m_commandBuffers[m_currentFrame];
@@ -337,6 +342,115 @@ void GraphicManager::destroyMesh(MeshGpuData& mesh)
     mesh.vertexBufferSize = 0;
     mesh.indexBufferSize = 0;
     mesh.indexCount = 0;
+}
+
+DynamicMeshGpuData GraphicManager::createDynamicMesh(
+    const Vertex* vertices,
+    size_t vertexCount,
+    const uint32_t* indices,
+    size_t indexCount)
+{
+    if (vertices == nullptr || indices == nullptr || vertexCount == 0 || indexCount == 0 ||
+        vertexCount > (std::numeric_limits<size_t>::max)() / sizeof(Vertex) ||
+        indexCount > (std::numeric_limits<size_t>::max)() / sizeof(uint32_t) ||
+        vertexCount > (std::numeric_limits<uint32_t>::max)() ||
+        indexCount > (std::numeric_limits<uint32_t>::max)())
+    {
+        throw std::invalid_argument("Dynamic mesh requires valid, non-empty vertex and index data");
+    }
+
+    DynamicMeshGpuData mesh;
+    mesh.vertexBufferSize = sizeof(Vertex) * vertexCount;
+    mesh.indexBufferSize = sizeof(uint32_t) * indexCount;
+    mesh.vertexCount = static_cast<uint32_t>(vertexCount);
+    mesh.indexCount = static_cast<uint32_t>(indexCount);
+    const VkDevice device = m_context.getDevice();
+    const VkMemoryPropertyFlags properties =
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    try
+    {
+        for (uint32_t frame = 0; frame < MAX_FRAMES_IN_FLIGHT; ++frame)
+        {
+            createBuffer(mesh.vertexBufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, properties,
+                mesh.vertexBuffers[frame], mesh.vertexMemories[frame]);
+            void* mapped = nullptr;
+            if (vkMapMemory(device, mesh.vertexMemories[frame], 0,
+                mesh.vertexBufferSize, 0, &mapped) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to persistently map dynamic vertex memory");
+            }
+            mesh.mappedVertexMemory[frame] = mapped;
+            std::memcpy(mapped, vertices, static_cast<size_t>(mesh.vertexBufferSize));
+        }
+
+        createBuffer(mesh.indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, properties,
+            mesh.indexBuffer, mesh.indexMemory);
+        void* mappedIndices = nullptr;
+        if (vkMapMemory(device, mesh.indexMemory, 0,
+            mesh.indexBufferSize, 0, &mappedIndices) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to map dynamic mesh index memory");
+        }
+        std::memcpy(mappedIndices, indices, static_cast<size_t>(mesh.indexBufferSize));
+        vkUnmapMemory(device, mesh.indexMemory);
+    }
+    catch (...)
+    {
+        destroyDynamicMesh(mesh);
+        throw;
+    }
+
+    std::cout << "Uploaded " << mesh.vertexCount << " dynamic vertices ("
+        << mesh.vertexBufferSize << " bytes per slot) to " << MAX_FRAMES_IN_FLIGHT
+        << " persistently mapped frame buffers; " << mesh.indexCount
+        << " shared indices (" << mesh.indexBufferSize << " bytes).\n";
+    return mesh;
+}
+
+void GraphicManager::updateDynamicMesh(
+    DynamicMeshGpuData& mesh,
+    uint32_t frameIndex,
+    const Vertex* vertices,
+    size_t vertexCount)
+{
+    if (frameIndex >= MAX_FRAMES_IN_FLIGHT || vertices == nullptr ||
+        vertexCount == 0 || vertexCount != mesh.vertexCount ||
+        mesh.mappedVertexMemory[frameIndex] == nullptr)
+    {
+        throw std::invalid_argument("Invalid dynamic mesh frame slot or vertex data");
+    }
+
+    std::memcpy(mesh.mappedVertexMemory[frameIndex], vertices,
+        static_cast<size_t>(mesh.vertexBufferSize));
+}
+
+void GraphicManager::destroyDynamicMesh(DynamicMeshGpuData& mesh)
+{
+    const VkDevice device = m_context.getDevice();
+    for (uint32_t frame = 0; frame < MAX_FRAMES_IN_FLIGHT; ++frame)
+    {
+        if (mesh.mappedVertexMemory[frame] != nullptr)
+        {
+            vkUnmapMemory(device, mesh.vertexMemories[frame]);
+        }
+        if (mesh.vertexBuffers[frame] != VK_NULL_HANDLE)
+        {
+            vkDestroyBuffer(device, mesh.vertexBuffers[frame], nullptr);
+        }
+        if (mesh.vertexMemories[frame] != VK_NULL_HANDLE)
+        {
+            vkFreeMemory(device, mesh.vertexMemories[frame], nullptr);
+        }
+    }
+    if (mesh.indexBuffer != VK_NULL_HANDLE)
+    {
+        vkDestroyBuffer(device, mesh.indexBuffer, nullptr);
+    }
+    if (mesh.indexMemory != VK_NULL_HANDLE)
+    {
+        vkFreeMemory(device, mesh.indexMemory, nullptr);
+    }
+    mesh = {};
 }
 
 void GraphicManager::createCommandPool()

@@ -4,6 +4,8 @@
 #include "OpaquePass.h"
 #include "VulkanContext.h"
 
+#include <chrono>
+
 namespace VulkanRender
 {
 
@@ -35,7 +37,8 @@ private:
     VulkanContext m_context;
     GraphicManager m_graphics;
     OpaquePass m_opaquePass;
-    MeshGpuData m_testMesh;
+    DynamicMeshGpuData m_testMesh;
+    std::chrono::steady_clock::time_point m_animationStart = std::chrono::steady_clock::now();
     bool m_loggedSuboptimalSwapchain = false;
 };
 

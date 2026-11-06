@@ -3,6 +3,7 @@
 #include "Window.h"
 
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
@@ -30,7 +31,7 @@ RenderingManager::RenderingManager(const Window& window)
     , m_graphics(m_context)
     , m_opaquePass(m_context)
 {
-    m_testMesh = m_graphics.createMesh(
+    m_testMesh = m_graphics.createDynamicMesh(
         kQuadVertices.data(),
         kQuadVertices.size(),
         kQuadIndices.data(),
@@ -43,7 +44,7 @@ RenderingManager::~RenderingManager()
     if (device != VK_NULL_HANDLE)
     {
         vkDeviceWaitIdle(device);
-        m_graphics.destroyMesh(m_testMesh);
+        m_graphics.destroyDynamicMesh(m_testMesh);
     }
 }
 
@@ -77,6 +78,19 @@ void RenderingManager::renderFrame()
     {
         throw std::runtime_error("Failed to acquire Vulkan swapchain image");
     }
+
+    // Only this frame slot is idle; other slots may still be read by the GPU.
+    const float seconds = std::chrono::duration<float>(
+        std::chrono::steady_clock::now() - m_animationStart).count();
+    auto vertices = kQuadVertices;
+    for (size_t i = 0; i < vertices.size(); ++i)
+    {
+        const float phase = seconds * 2.0f + static_cast<float>(i) * 1.2f;
+        vertices[i].position[0] += 0.12f * std::sin(phase);
+        vertices[i].position[1] += 0.12f * std::cos(phase * 1.1f);
+    }
+    m_graphics.updateDynamicMesh(m_testMesh, m_graphics.getCurrentFrameIndex(),
+        vertices.data(), vertices.size());
 
     m_graphics.resetCurrentFrameFence();
     m_graphics.resetCurrentCommandBuffer();
@@ -142,7 +156,8 @@ void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t image
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
-    m_opaquePass.record(commandBuffer, imageIndex, m_testMesh);
+    m_opaquePass.record(commandBuffer, imageIndex, m_testMesh,
+        m_graphics.getCurrentFrameIndex());
 
     transitionSwapchainImage(
         commandBuffer,

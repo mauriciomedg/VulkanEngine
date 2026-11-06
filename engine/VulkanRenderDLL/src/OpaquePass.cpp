@@ -74,6 +74,26 @@ void OpaquePass::record(
     uint32_t imageIndex,
     const MeshGpuData& mesh)
 {
+    recordMesh(commandBuffer, imageIndex, mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
+}
+
+void OpaquePass::record(
+    VkCommandBuffer commandBuffer,
+    uint32_t imageIndex,
+    const DynamicMeshGpuData& mesh,
+    uint32_t frameIndex)
+{
+    recordMesh(commandBuffer, imageIndex, mesh.vertexBuffers.at(frameIndex),
+        mesh.indexBuffer, mesh.indexCount);
+}
+
+void OpaquePass::recordMesh(
+    VkCommandBuffer commandBuffer,
+    uint32_t imageIndex,
+    VkBuffer vertexBuffer,
+    VkBuffer indexBuffer,
+    uint32_t indexCount)
+{
     VkClearColorValue clearColor = {};
     clearColor.float32[0] = 0.05f;
     clearColor.float32[1] = 0.10f;
@@ -115,14 +135,14 @@ void OpaquePass::record(
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     VkBuffer vertexBuffers[] = {
-        mesh.vertexBuffer
+        vertexBuffer
     };
     VkDeviceSize offsets[] = {
         0
     };
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, mesh.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(commandBuffer, mesh.indexCount, 1, 0, 0, 0);
+    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
 
     vkCmdEndRendering(commandBuffer);
 }

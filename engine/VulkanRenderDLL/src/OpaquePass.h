@@ -9,6 +9,7 @@ namespace VulkanRender
 {
 
 class VulkanContext;
+struct DynamicMeshGpuData;
 
 class OpaquePass final : public RenderPass
 {
@@ -24,7 +25,19 @@ public:
         uint32_t imageIndex,
         const MeshGpuData& mesh) override;
 
+    void record(
+        VkCommandBuffer commandBuffer,
+        uint32_t imageIndex,
+        const DynamicMeshGpuData& mesh,
+        uint32_t frameIndex);
+
 private:
+    void recordMesh(
+        VkCommandBuffer commandBuffer,
+        uint32_t imageIndex,
+        VkBuffer vertexBuffer,
+        VkBuffer indexBuffer,
+        uint32_t indexCount);
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char>& code) const;
 

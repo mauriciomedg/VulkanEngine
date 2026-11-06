@@ -9,10 +9,10 @@ Renderer
     |
     +-- RenderingManager
             |
-            +-- test MeshGpuData
+            +-- test DynamicMeshGpuData
             +-- OpaquePass
             +-- GraphicManager
-            |       +-- createMesh / destroyMesh
+            |       +-- static and dynamic mesh creation / destruction
             |       +-- command buffers / sync / submit
             +-- VulkanContext
 ```
@@ -21,23 +21,23 @@ Renderer
 
 `VulkanContext` owns low-level Vulkan environment state: instance, validation, surface, physical/logical device, queues, swapchain, images, image views, format, extent, and swapchain image layouts.
 
-`GraphicManager` provides generic GPU mesh creation and destruction using host-visible, coherent vertex/index buffers and the shared buffer allocation helpers. It owns the command pool, command buffers, frame semaphores, fences, and graphics queue submission resources.
+`GraphicManager` provides generic static and dynamic GPU mesh creation and destruction using host-visible, coherent memory and the shared buffer allocation helpers. `DynamicMeshGpuData` has one independent, persistently mapped vertex buffer per frame slot and one shared static index buffer. The common `MAX_FRAMES_IN_FLIGHT` constant in `MeshData.h` controls both vertex copies and frame resources. `GraphicManager` also owns the command pool, command buffers, frame semaphores, fences, and graphics queue submission resources.
 
-`OpaquePass` owns the opaque graphics pipeline and pipeline layout. Its `record` method receives a generic `const MeshGpuData&` and records dynamic rendering, viewport/scissor setup, mesh buffer binding, and indexed drawing.
+`OpaquePass` owns the opaque graphics pipeline and pipeline layout. Its `record` overloads accept a static `MeshGpuData` or a `DynamicMeshGpuData` plus frame slot, select the appropriate vertex buffer, and record dynamic rendering, viewport/scissor setup, mesh buffer binding, and indexed drawing.
 
-`RenderingManager.cpp` contains the temporary CPU quad data (4 vertices and 6 uint32 indices). `RenderingManager` owns the uploaded `m_testMesh`, creates it after the graphics resources and pass are constructed, and destroys it after waiting for the device to become idle, before member teardown. It also owns the frame sequence: acquire swapchain image, reset frame resources, transition image layouts, execute `OpaquePass`, submit, present, and advance the frame.
+`RenderingManager.cpp` contains the temporary CPU quad data (4 vertices and 6 uint32 indices). `RenderingManager` owns the dynamic `m_testMesh`, creates it after the graphics resources and pass are constructed, and destroys it after waiting for the device to become idle, before member teardown. After waiting for the current frame fence and acquiring an image, it deforms a fresh copy of the original CPU positions using elapsed time and copies it into only the current slot. Colors and the six shared indices stay unchanged. It also owns the frame sequence: acquire swapchain image, update current-slot vertices, reset frame resources, transition image layouts, execute `OpaquePass`, submit, present, and advance the frame.
 
 ```text
 temporary CPU quad
         |
         v
-GraphicManager::createMesh
+GraphicManager::createDynamicMesh
         |
         v
-MeshGpuData
+DynamicMeshGpuData (2 vertex buffers + 1 index buffer)
         |
         v
-OpaquePass::record
+wait slot fence -> update mapped vertices -> OpaquePass::record(slot)
         |
         v
 vkCmdDrawIndexed
@@ -86,28 +86,13 @@ Running the application opens a `1280 x 720` window named:
 Vulkan Mini Engine
 ```
 
-The renderer clears the swapchain image and draws one indexed, interpolated-color quad using a Vulkan graphics pipeline, vertex buffer, and index buffer. Closing the window shuts the application down cleanly.
+The renderer clears the swapchain image and draws one continuously deforming, indexed, interpolated-color quad using a Vulkan graphics pipeline, two vertex buffers, and one shared index buffer. Each vertex allocation is mapped once during creation and unmapped once during destruction; frame updates only copy into mapped memory after that slot is idle. The index allocation is uploaded and unmapped once at creation. Closing the window shuts the application down cleanly.
 
-In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, verifies and enables dynamic rendering, and creates the Vulkan surface, swapchain, command resources, synchronization objects, graphics pipeline, and static quad buffers.
+In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, verifies and enables dynamic rendering, and creates the Vulkan surface, swapchain, command resources, synchronization objects, graphics pipeline, and dynamic quad buffers.
 
 ## Next Milestone
 
-The next Vulkan milestone should introduce safe dynamic vertex updates while leaving the `VulkanSandbox` public-facing code unchanged:
-
-```text
-Use persistently mapped, per-frame-safe vertex memory
-        |
-        v
-update vertex positions every frame
-        |
-        v
-run an artificial deformation test
-        |
-        v
-render dynamic deforming geometry
-```
-
-After that, replace the synthetic vertex updates with real PhysiK surface positions and display the live soft-body simulation.
+The artificial deformation test now exercises safe dynamic vertex updates. The next milestone is to replace the synthetic positions with real PhysiK surface positions while leaving the `VulkanSandbox` public-facing code unchanged. PhysiK, 3D, cameras, and depth are not part of this milestone.
 
 The intended future pass order is:
 

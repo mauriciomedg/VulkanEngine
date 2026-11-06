@@ -21,6 +21,7 @@ public:
     GraphicManager(const GraphicManager&) = delete;
     GraphicManager& operator=(const GraphicManager&) = delete;
 
+    uint32_t getCurrentFrameIndex() const;
     VkCommandBuffer getCurrentCommandBuffer() const;
     VkSemaphore getImageAvailableSemaphore() const;
     VkSemaphore getRenderFinishedSemaphore(uint32_t imageIndex) const;
@@ -31,6 +32,19 @@ public:
         const uint32_t* indices,
         size_t indexCount);
     void destroyMesh(MeshGpuData& mesh);
+    DynamicMeshGpuData createDynamicMesh(
+        const Vertex* vertices,
+        size_t vertexCount,
+        const uint32_t* indices,
+        size_t indexCount);
+    // Caller must wait for this frame slot to finish using the mesh before updating.
+    void updateDynamicMesh(
+        DynamicMeshGpuData& mesh,
+        uint32_t frameIndex,
+        const Vertex* vertices,
+        size_t vertexCount);
+    // Caller must ensure all GPU use has finished before destruction.
+    void destroyDynamicMesh(DynamicMeshGpuData& mesh);
 
     void waitForCurrentFrame() const;
     void resetCurrentFrameFence() const;
@@ -39,8 +53,6 @@ public:
     void advanceFrame();
 
 private:
-    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-
     uint32_t findMemoryType(
         uint32_t typeFilter,
         VkMemoryPropertyFlags properties) const;
