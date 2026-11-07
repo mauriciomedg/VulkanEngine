@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 
 namespace VulkanRender
 {
@@ -72,19 +73,22 @@ OpaquePass::~OpaquePass()
 void OpaquePass::record(
     VkCommandBuffer commandBuffer,
     uint32_t imageIndex,
-    const MeshGpuData& mesh)
+    const MeshGpuData& mesh,
+    const CameraPushConstants& cameraData)
 {
-    recordMesh(commandBuffer, imageIndex, mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount);
+    recordMesh(commandBuffer, imageIndex, mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount,
+        cameraData);
 }
 
 void OpaquePass::record(
     VkCommandBuffer commandBuffer,
     uint32_t imageIndex,
     const DynamicMeshGpuData& mesh,
-    uint32_t frameIndex)
+    uint32_t frameIndex,
+    const CameraPushConstants& cameraData)
 {
     recordMesh(commandBuffer, imageIndex, mesh.vertexBuffers.at(frameIndex),
-        mesh.indexBuffer, mesh.indexCount);
+        mesh.indexBuffer, mesh.indexCount, cameraData);
 }
 
 void OpaquePass::recordMesh(
@@ -92,7 +96,8 @@ void OpaquePass::recordMesh(
     uint32_t imageIndex,
     VkBuffer vertexBuffer,
     VkBuffer indexBuffer,
-    uint32_t indexCount)
+    uint32_t indexCount,
+    const CameraPushConstants& cameraData)
 {
     VkClearColorValue clearColor = {};
     clearColor.float32[0] = 0.05f;
@@ -118,6 +123,19 @@ void OpaquePass::recordMesh(
 
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+
+    if (m_cameraPushConstantSize == sizeof(CameraPushConstants))
+    {
+        vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT,
+            0, m_cameraPushConstantSize, &cameraData);
+    }
+    else
+    {
+        // The reduced shader uses an identity model for this milestone.
+        const CameraViewProjectionPushConstants reducedData{cameraData.view, cameraData.projection};
+        vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT,
+            0, m_cameraPushConstantSize, &reducedData);
+    }
 
     const VkExtent2D extent = m_context.getSwapchainExtent();
     VkViewport viewport = {};
@@ -149,7 +167,22 @@ void OpaquePass::recordMesh(
 
 void OpaquePass::createGraphicsPipeline()
 {
-    const std::vector<char> vertexShaderCode = readFile(kShaderDirectory / "triangle.vert.spv");
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(m_context.getPhysicalDevice(), &properties);
+    const uint32_t limit = properties.limits.maxPushConstantsSize;
+    if (limit < sizeof(CameraViewProjectionPushConstants))
+    {
+        throw std::runtime_error("Camera requires at least 128 bytes of push constants; device supports "
+            + std::to_string(limit));
+    }
+    const bool includeModel = limit >= sizeof(CameraPushConstants);
+    m_cameraPushConstantSize = includeModel ? sizeof(CameraPushConstants)
+        : sizeof(CameraViewProjectionPushConstants);
+    std::cout << "Camera push constants: " << m_cameraPushConstantSize
+        << " bytes; device maxPushConstantsSize: " << limit << " bytes.\n";
+
+    const std::vector<char> vertexShaderCode = readFile(kShaderDirectory /
+        (includeModel ? "triangle.vert.spv" : "triangle.camera128.vert.spv"));
     const std::vector<char> fragmentShaderCode = readFile(kShaderDirectory / "triangle.frag.spv");
 
     VkShaderModule vertexShaderModule = createShaderModule(vertexShaderCode);
@@ -183,7 +216,7 @@ void OpaquePass::createGraphicsPipeline()
     std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
     attributeDescriptions[0].binding = 0;
     attributeDescriptions[0].location = 0;
-    attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+    attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
     attributeDescriptions[0].offset = offsetof(Vertex, position);
 
     attributeDescriptions[1].binding = 0;
@@ -248,6 +281,12 @@ void OpaquePass::createGraphicsPipeline()
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    VkPushConstantRange cameraRange{};
+    cameraRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    cameraRange.offset = 0;
+    cameraRange.size = m_cameraPushConstantSize;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &cameraRange;
 
     VkResult result =
         vkCreatePipelineLayout(m_context.getDevice(), &pipelineLayoutInfo, nullptr, &m_pipelineLayout);

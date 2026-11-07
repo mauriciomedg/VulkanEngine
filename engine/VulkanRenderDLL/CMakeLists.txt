@@ -15,6 +15,7 @@ set(VULKAN_RENDER_SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
 set(VULKAN_RENDER_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders")
 set(VULKAN_RENDER_SHADER_OUTPUTS
     "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.vert.spv"
+    "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.camera128.vert.spv"
     "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.frag.spv"
 )
 
@@ -42,6 +43,18 @@ add_custom_command(
 
 add_custom_target(VulkanRenderShaders
     DEPENDS ${VULKAN_RENDER_SHADER_OUTPUTS}
+)
+
+add_custom_command(
+    OUTPUT "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.camera128.vert.spv"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${VULKAN_RENDER_SHADER_OUTPUT_DIR}"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}"
+        -DCAMERA_IDENTITY_MODEL=1
+        "${VULKAN_RENDER_SHADER_SOURCE_DIR}/triangle.vert"
+        -o "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.camera128.vert.spv"
+    DEPENDS "${VULKAN_RENDER_SHADER_SOURCE_DIR}/triangle.vert"
+    VERBATIM
+    COMMENT "Compiling 128-byte camera push constant vertex shader"
 )
 
 add_library(VulkanRenderDLL SHARED

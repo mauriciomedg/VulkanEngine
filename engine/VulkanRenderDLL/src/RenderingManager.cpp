@@ -13,10 +13,10 @@ namespace
 {
 
 constexpr std::array<Vertex, 4> kQuadVertices = {{
-    {{-0.5f, -0.5f}, {1.0f, 0.1f, 0.1f}},
-    {{0.5f, -0.5f}, {0.1f, 1.0f, 0.1f}},
-    {{0.5f, 0.5f}, {0.1f, 0.3f, 1.0f}},
-    {{-0.5f, 0.5f}, {1.0f, 1.0f, 0.1f}}
+    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.1f, 0.1f}},
+    {{0.5f, -0.5f, 0.0f}, {0.1f, 1.0f, 0.1f}},
+    {{0.5f, 0.5f, 0.0f}, {0.1f, 0.3f, 1.0f}},
+    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 0.1f}}
 }};
 
 constexpr std::array<uint32_t, 6> kQuadIndices = {
@@ -143,6 +143,17 @@ void RenderingManager::renderFrame()
 
 void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
+    const VkExtent2D extent = m_context.getSwapchainExtent();
+    if (extent.width == 0 || extent.height == 0)
+    {
+        throw std::runtime_error("Cannot compute camera projection for an empty swapchain extent");
+    }
+    CameraPushConstants cameraData{};
+    cameraData.model.elements = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    cameraData.view = m_camera.getViewMatrix();
+    cameraData.projection = m_camera.getProjectionMatrix(
+        static_cast<float>(extent.width) / static_cast<float>(extent.height));
+
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -163,7 +174,7 @@ void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t image
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
     m_opaquePass.record(commandBuffer, imageIndex, m_testMesh,
-        m_graphics.getCurrentFrameIndex());
+        m_graphics.getCurrentFrameIndex(), cameraData);
 
     transitionSwapchainImage(
         commandBuffer,

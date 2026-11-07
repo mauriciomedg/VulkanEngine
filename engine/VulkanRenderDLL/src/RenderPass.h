@@ -7,6 +7,7 @@ namespace VulkanRender
 {
 
 struct MeshGpuData;
+struct CameraPushConstants;
 
 class RenderPass
 {
@@ -16,7 +17,8 @@ public:
     virtual void record(
         VkCommandBuffer commandBuffer,
         uint32_t imageIndex,
-        const MeshGpuData& mesh) = 0;
+        const MeshGpuData& mesh,
+        const CameraPushConstants& cameraData) = 0;
 };
 
 }
