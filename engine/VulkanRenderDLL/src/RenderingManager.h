@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Camera.h"
 #include "GraphicManager.h"
 #include "OpaquePass.h"
 #include "VulkanContext.h"
@@ -34,11 +35,14 @@ private:
         VkPipelineStageFlags srcStage,
         VkPipelineStageFlags dstStage);
 
+    const Window& m_window;
+    Camera m_camera;
     VulkanContext m_context;
     GraphicManager m_graphics;
     OpaquePass m_opaquePass;
     DynamicMeshGpuData m_testMesh;
     std::chrono::steady_clock::time_point m_animationStart = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point m_previousFrameTime = m_animationStart;
     bool m_loggedSuboptimalSwapchain = false;
 };
 

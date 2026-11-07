@@ -27,7 +27,8 @@ constexpr std::array<uint32_t, 6> kQuadIndices = {
 }
 
 RenderingManager::RenderingManager(const Window& window)
-    : m_context(window)
+    : m_window(window)
+    , m_context(window)
     , m_graphics(m_context)
     , m_opaquePass(m_context)
 {
@@ -50,6 +51,11 @@ RenderingManager::~RenderingManager()
 
 void RenderingManager::renderFrame()
 {
+    const auto now = std::chrono::steady_clock::now();
+    const float deltaTime = std::chrono::duration<float>(now - m_previousFrameTime).count();
+    m_previousFrameTime = now;
+    m_camera.update(m_window.getNativeHandle(), deltaTime);
+
     m_graphics.waitForCurrentFrame();
 
     uint32_t imageIndex = 0;

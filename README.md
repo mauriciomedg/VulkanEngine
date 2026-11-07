@@ -9,6 +9,7 @@ Renderer
     |
     +-- RenderingManager
             |
+            +-- Camera (CPU navigation and view/projection math)
             +-- test DynamicMeshGpuData
             +-- OpaquePass
             +-- GraphicManager
@@ -90,9 +91,19 @@ The renderer clears the swapchain image and draws one continuously deforming, in
 
 In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, verifies and enables dynamic rendering, and creates the Vulkan surface, swapchain, command resources, synchronization objects, graphics pipeline, and dynamic quad buffers.
 
+## Camera Navigation
+
+`RenderingManager` owns a Vulkan-independent `Camera` and a reference to the longer-lived `Window`. Each frame it computes delta time with `std::chrono::steady_clock`, updates camera input, and then runs the existing dynamic mesh/render sequence.
+
+The camera stores position, yaw/pitch in degrees, movement speed (3 units/second), mouse sensitivity (0.1 degrees per cursor unit), FOV (60 degrees), near/far planes (0.1/1000), orientation vectors, and previous mouse coordinates. It starts at `(0, 0, 3)` with yaw `-90` and pitch `0`, looking toward negative Z. Forward comes from yaw/pitch; right is normalized `cross(forward, worldUp)` and up is normalized `cross(right, forward)`, with world up `(0, 1, 0)`.
+
+W/S move forward/back, A/D strafe, and Q/E move down/up along world up. Movement uses delta time. The cursor is captured while focused; mouse movement changes yaw/pitch, with pitch clamped to +/-89 degrees. The first mouse sample, including after focus returns, initializes cursor history without rotating. Escape closes the application.
+
+Minimal `Vec3` and column-major `Mat4` types avoid adding a math dependency. The view matrix is right-handed; the perspective matrix uses negative-Z forward, zero-to-one depth, and inverted Y for Vulkan. Camera matrices remain CPU-side for this milestone, so the animated quad's rendering is unchanged. No camera GPU buffers or shader changes are included.
+
 ## Next Milestone
 
-The artificial deformation test now exercises safe dynamic vertex updates. The next milestone is to replace the synthetic positions with real PhysiK surface positions while leaving the `VulkanSandbox` public-facing code unchanged. PhysiK, 3D, cameras, and depth are not part of this milestone.
+Change vertex positions from 2D to 3D, then upload model/view/projection matrices to the vertex shader using push constants or a uniform buffer. After that, add a depth buffer, render a 3D mesh, and connect PhysiK surface positions. These steps, lighting, and materials are not implemented yet.
 
 The intended future pass order is:
 

@@ -45,6 +45,8 @@ add_custom_target(VulkanRenderShaders
 )
 
 add_library(VulkanRenderDLL SHARED
+    src/Camera.cpp
+    src/Camera.h
     include/VulkanRender/Export.h
     include/VulkanRender/Renderer.h
     src/GraphicManager.cpp
