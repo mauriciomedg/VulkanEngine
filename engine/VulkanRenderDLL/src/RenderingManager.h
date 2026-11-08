@@ -41,8 +41,7 @@ private:
     GraphicManager m_graphics;
     OpaquePass m_opaquePass;
     DynamicMeshGpuData m_testMesh;
-    std::chrono::steady_clock::time_point m_animationStart = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point m_previousFrameTime = m_animationStart;
+    std::chrono::steady_clock::time_point m_previousFrameTime = std::chrono::steady_clock::now();
     bool m_loggedSuboptimalSwapchain = false;
 };
 

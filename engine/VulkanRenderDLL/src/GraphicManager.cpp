@@ -3,6 +3,7 @@
 #include "VulkanContext.h"
 
 #include <cstring>
+#include <array>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -12,14 +13,30 @@ namespace VulkanRender
 GraphicManager::GraphicManager(VulkanContext& context)
     : m_context(context)
 {
-    createCommandPool();
-    createCommandBuffers();
-    createSyncObjects();
+    try
+    {
+        createCommandPool();
+        createCommandBuffers();
+        createSyncObjects();
+        createDepthResources();
+    }
+    catch (...)
+    {
+        destroyResources();
+        throw;
+    }
 }
 
 GraphicManager::~GraphicManager()
 {
+    vkDeviceWaitIdle(m_context.getDevice());
+    destroyResources();
+}
+
+void GraphicManager::destroyResources()
+{
     const VkDevice device = m_context.getDevice();
+    destroyDepthResources();
 
     for (VkSemaphore semaphore : m_imageAvailableSemaphores)
     {
@@ -60,6 +77,135 @@ GraphicManager::~GraphicManager()
 uint32_t GraphicManager::getCurrentFrameIndex() const
 {
     return m_currentFrame;
+}
+
+VkFormat GraphicManager::getDepthFormat() const
+{
+    return m_depthFormat;
+}
+
+VkImageView GraphicManager::getDepthImageView() const
+{
+    return m_depthImageView;
+}
+
+VkFormat GraphicManager::chooseDepthFormat() const
+{
+    constexpr std::array<VkFormat, 3> candidates = {
+        VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT
+    };
+    for (VkFormat format : candidates)
+    {
+        VkFormatProperties properties{};
+        vkGetPhysicalDeviceFormatProperties(m_context.getPhysicalDevice(), format, &properties);
+        if (properties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
+        {
+            return format;
+        }
+    }
+    throw std::runtime_error("No supported optimal-tiling depth attachment format");
+}
+
+void GraphicManager::createDepthResources()
+{
+    m_depthFormat = chooseDepthFormat();
+    const VkExtent2D extent = m_context.getSwapchainExtent();
+    const VkDevice device = m_context.getDevice();
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.format = m_depthFormat;
+    imageInfo.extent = {extent.width, extent.height, 1};
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (vkCreateImage(device, &imageInfo, nullptr, &m_depthImage) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create depth image");
+    }
+
+    VkMemoryRequirements requirements{};
+    vkGetImageMemoryRequirements(device, m_depthImage, &requirements);
+    VkMemoryAllocateInfo allocation{};
+    allocation.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocation.allocationSize = requirements.size;
+    allocation.memoryTypeIndex = findMemoryType(requirements.memoryTypeBits,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (vkAllocateMemory(device, &allocation, nullptr, &m_depthMemory) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate device-local depth memory");
+    }
+    if (vkBindImageMemory(device, m_depthImage, m_depthMemory, 0) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to bind depth image memory");
+    }
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = m_depthImage;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = m_depthFormat;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.layerCount = 1;
+    if (vkCreateImageView(device, &viewInfo, nullptr, &m_depthImageView) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create depth image view");
+    }
+
+    const char* formatName = m_depthFormat == VK_FORMAT_D32_SFLOAT ? "VK_FORMAT_D32_SFLOAT"
+        : m_depthFormat == VK_FORMAT_D32_SFLOAT_S8_UINT ? "VK_FORMAT_D32_SFLOAT_S8_UINT"
+        : "VK_FORMAT_D24_UNORM_S8_UINT";
+    std::cout << "Depth buffer:\n  format: " << formatName
+        << "\n  extent: " << extent.width << " x " << extent.height
+        << "\n  memory: DEVICE_LOCAL\n";
+}
+
+void GraphicManager::destroyDepthResources()
+{
+    const VkDevice device = m_context.getDevice();
+    if (m_depthImageView != VK_NULL_HANDLE) vkDestroyImageView(device, m_depthImageView, nullptr);
+    if (m_depthImage != VK_NULL_HANDLE) vkDestroyImage(device, m_depthImage, nullptr);
+    if (m_depthMemory != VK_NULL_HANDLE) vkFreeMemory(device, m_depthMemory, nullptr);
+    m_depthImageView = VK_NULL_HANDLE;
+    m_depthImage = VK_NULL_HANDLE;
+    m_depthMemory = VK_NULL_HANDLE;
+    m_depthFormat = VK_FORMAT_UNDEFINED;
+    m_depthInitialized = false;
+}
+
+void GraphicManager::prepareDepthAttachment(VkCommandBuffer commandBuffer)
+{
+    const VkPipelineStageFlags depthStages = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+        | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcAccessMask = m_depthInitialized ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT : 0;
+    barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+        | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    barrier.oldLayout = m_depthInitialized ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+        : VK_IMAGE_LAYOUT_UNDEFINED;
+    // Combined layout works without enabling the separateDepthStencilLayouts feature.
+    barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = m_depthImage;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if (m_depthFormat != VK_FORMAT_D32_SFLOAT)
+    {
+        barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    }
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+    vkCmdPipelineBarrier(commandBuffer,
+        m_depthInitialized ? depthStages : VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        depthStages, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    m_depthInitialized = true;
 }
 
 VkCommandBuffer GraphicManager::getCurrentCommandBuffer() const

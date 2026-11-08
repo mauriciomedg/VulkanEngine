@@ -52,7 +52,16 @@ public:
     void submitCurrentFrame(uint32_t imageIndex) const;
     void advanceFrame();
 
+    VkFormat getDepthFormat() const;
+    VkImageView getDepthImageView() const;
+    // Initializes the layout on first use and orders shared depth access between frames.
+    void prepareDepthAttachment(VkCommandBuffer commandBuffer);
+
 private:
+    void destroyResources();
+    void createDepthResources();
+    void destroyDepthResources();
+    VkFormat chooseDepthFormat() const;
     uint32_t findMemoryType(
         uint32_t typeFilter,
         VkMemoryPropertyFlags properties) const;
@@ -73,6 +82,11 @@ private:
     std::vector<VkSemaphore> m_renderFinishedSemaphores;
     std::vector<VkFence> m_inFlightFences;
     uint32_t m_currentFrame = 0;
+    VkImage m_depthImage = VK_NULL_HANDLE;
+    VkDeviceMemory m_depthMemory = VK_NULL_HANDLE;
+    VkImageView m_depthImageView = VK_NULL_HANDLE;
+    VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
+    bool m_depthInitialized = false;
 };
 
 }

@@ -3,7 +3,6 @@
 #include "Window.h"
 
 #include <array>
-#include <cmath>
 #include <iostream>
 #include <stdexcept>
 
@@ -12,16 +11,25 @@ namespace VulkanRender
 namespace
 {
 
-constexpr std::array<Vertex, 4> kQuadVertices = {{
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.1f, 0.1f}},
-    {{0.5f, -0.5f, 0.0f}, {0.1f, 1.0f, 0.1f}},
-    {{0.5f, 0.5f, 0.0f}, {0.1f, 0.3f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 0.1f}}
+constexpr std::array<Vertex, 8> kCubeVertices = {{
+    {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.1f, 0.1f}},
+    {{0.5f, -0.5f, 0.5f}, {0.1f, 1.0f, 0.1f}},
+    {{0.5f, 0.5f, 0.5f}, {0.1f, 0.3f, 1.0f}},
+    {{-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 0.1f}},
+    {{-0.5f, -0.5f, -0.5f}, {0.1f, 1.0f, 1.0f}},
+    {{0.5f, -0.5f, -0.5f}, {1.0f, 0.1f, 1.0f}},
+    {{0.5f, 0.5f, -0.5f}, {1.0f, 0.6f, 0.1f}},
+    {{-0.5f, 0.5f, -0.5f}, {0.6f, 0.2f, 1.0f}}
 }};
 
-constexpr std::array<uint32_t, 6> kQuadIndices = {
-    0, 1, 2,
-    2, 3, 0
+// Front first, rear last: depth must reject the rear even though it is drawn later.
+constexpr std::array<uint32_t, 36> kCubeIndices = {
+    0, 1, 2, 2, 3, 0,
+    1, 5, 6, 6, 2, 1,
+    4, 0, 3, 3, 7, 4,
+    3, 2, 6, 6, 7, 3,
+    4, 5, 1, 1, 0, 4,
+    5, 4, 7, 7, 6, 5
 };
 
 }
@@ -30,13 +38,13 @@ RenderingManager::RenderingManager(const Window& window)
     : m_window(window)
     , m_context(window)
     , m_graphics(m_context)
-    , m_opaquePass(m_context)
+    , m_opaquePass(m_context, m_graphics.getDepthFormat())
 {
     m_testMesh = m_graphics.createDynamicMesh(
-        kQuadVertices.data(),
-        kQuadVertices.size(),
-        kQuadIndices.data(),
-        kQuadIndices.size());
+        kCubeVertices.data(),
+        kCubeVertices.size(),
+        kCubeIndices.data(),
+        kCubeIndices.size());
 }
 
 RenderingManager::~RenderingManager()
@@ -86,17 +94,8 @@ void RenderingManager::renderFrame()
     }
 
     // Only this frame slot is idle; other slots may still be read by the GPU.
-    const float seconds = std::chrono::duration<float>(
-        std::chrono::steady_clock::now() - m_animationStart).count();
-    auto vertices = kQuadVertices;
-    for (size_t i = 0; i < vertices.size(); ++i)
-    {
-        const float phase = seconds * 2.0f + static_cast<float>(i) * 1.2f;
-        vertices[i].position[0] += 0.12f * std::sin(phase);
-        vertices[i].position[1] += 0.12f * std::cos(phase * 1.1f);
-    }
     m_graphics.updateDynamicMesh(m_testMesh, m_graphics.getCurrentFrameIndex(),
-        vertices.data(), vertices.size());
+        kCubeVertices.data(), kCubeVertices.size());
 
     m_graphics.resetCurrentFrameFence();
     m_graphics.resetCurrentCommandBuffer();
@@ -173,8 +172,9 @@ void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t image
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
+    m_graphics.prepareDepthAttachment(commandBuffer);
     m_opaquePass.record(commandBuffer, imageIndex, m_testMesh,
-        m_graphics.getCurrentFrameIndex(), cameraData);
+        m_graphics.getCurrentFrameIndex(), cameraData, m_graphics.getDepthImageView());
 
     transitionSwapchainImage(
         commandBuffer,

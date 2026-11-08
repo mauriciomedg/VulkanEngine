@@ -47,8 +47,9 @@ std::vector<char> readFile(const std::filesystem::path& filename)
 
 }
 
-OpaquePass::OpaquePass(VulkanContext& context)
+OpaquePass::OpaquePass(VulkanContext& context, VkFormat depthFormat)
     : m_context(context)
+    , m_depthFormat(depthFormat)
 {
     createGraphicsPipeline();
 }
@@ -74,10 +75,11 @@ void OpaquePass::record(
     VkCommandBuffer commandBuffer,
     uint32_t imageIndex,
     const MeshGpuData& mesh,
-    const CameraPushConstants& cameraData)
+    const CameraPushConstants& cameraData,
+    VkImageView depthImageView)
 {
     recordMesh(commandBuffer, imageIndex, mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount,
-        cameraData);
+        cameraData, depthImageView);
 }
 
 void OpaquePass::record(
@@ -85,10 +87,11 @@ void OpaquePass::record(
     uint32_t imageIndex,
     const DynamicMeshGpuData& mesh,
     uint32_t frameIndex,
-    const CameraPushConstants& cameraData)
+    const CameraPushConstants& cameraData,
+    VkImageView depthImageView)
 {
     recordMesh(commandBuffer, imageIndex, mesh.vertexBuffers.at(frameIndex),
-        mesh.indexBuffer, mesh.indexCount, cameraData);
+        mesh.indexBuffer, mesh.indexCount, cameraData, depthImageView);
 }
 
 void OpaquePass::recordMesh(
@@ -97,7 +100,8 @@ void OpaquePass::recordMesh(
     VkBuffer vertexBuffer,
     VkBuffer indexBuffer,
     uint32_t indexCount,
-    const CameraPushConstants& cameraData)
+    const CameraPushConstants& cameraData,
+    VkImageView depthImageView)
 {
     VkClearColorValue clearColor = {};
     clearColor.float32[0] = 0.05f;
@@ -113,6 +117,14 @@ void OpaquePass::recordMesh(
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachment.clearValue.color = clearColor;
 
+    VkRenderingAttachmentInfo depthAttachment{};
+    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depthAttachment.imageView = depthImageView;
+    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.clearValue.depthStencil = {1.0f, 0};
+
     VkRenderingInfo renderingInfo = {};
     renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
     renderingInfo.renderArea.offset = {0, 0};
@@ -120,6 +132,7 @@ void OpaquePass::recordMesh(
     renderingInfo.layerCount = 1;
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachments = &colorAttachment;
+    renderingInfo.pDepthAttachment = &depthAttachment;
 
     vkCmdBeginRendering(commandBuffer, &renderingInfo);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
@@ -302,6 +315,15 @@ void OpaquePass::createGraphicsPipeline()
     renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachmentFormats = &colorAttachmentFormat;
+    renderingInfo.depthAttachmentFormat = m_depthFormat;
+
+    VkPipelineDepthStencilStateCreateInfo depthStencil{};
+    depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depthStencil.depthTestEnable = VK_TRUE;
+    depthStencil.depthWriteEnable = VK_TRUE;
+    depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depthStencil.depthBoundsTestEnable = VK_FALSE;
+    depthStencil.stencilTestEnable = VK_FALSE;
 
     VkGraphicsPipelineCreateInfo pipelineInfo = {};
     pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -313,6 +335,7 @@ void OpaquePass::createGraphicsPipeline()
     pipelineInfo.pViewportState = &viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &multisampling;
+    pipelineInfo.pDepthStencilState = &depthStencil;
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = m_pipelineLayout;

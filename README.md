@@ -6,117 +6,94 @@ A small Windows C++ learning project for building toward Vulkan one milestone at
 
 ```text
 Renderer
-    |
+    +-- Window
     +-- RenderingManager
-            |
             +-- Camera (CPU navigation and view/projection math)
             +-- test DynamicMeshGpuData
-            +-- OpaquePass
+            +-- OpaquePass (pipeline, push constants, dynamic rendering)
             +-- GraphicManager
-            |       +-- static and dynamic mesh creation / destruction
+            |       +-- static and dynamic mesh resources
+            |       +-- shared depth image, memory, and view
             |       +-- command buffers / sync / submit
-            +-- VulkanContext
+            +-- VulkanContext (device and swapchain state)
 ```
 
-`VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `VulkanRenderDLL` behind that same boundary.
+`VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `VulkanRenderDLL` behind that boundary.
 
-`VulkanContext` owns low-level Vulkan environment state: instance, validation, surface, physical/logical device, queues, swapchain, images, image views, format, extent, and swapchain image layouts.
+`VulkanContext` owns the instance, validation messenger, surface, physical/logical device, queues, swapchain, images, image views, format, extent, and swapchain image layouts.
 
-`GraphicManager` provides generic static and dynamic GPU mesh creation and destruction using host-visible, coherent memory and the shared buffer allocation helpers. `DynamicMeshGpuData` has one independent, persistently mapped vertex buffer per frame slot and one shared static index buffer. The common `MAX_FRAMES_IN_FLIGHT` constant in `MeshData.h` controls both vertex copies and frame resources. `GraphicManager` also owns the command pool, command buffers, frame semaphores, fences, and graphics queue submission resources.
+`GraphicManager` provides static and dynamic GPU mesh allocation with host-visible, coherent buffer memory. `DynamicMeshGpuData` has one persistently mapped vertex buffer per frame slot and one shared index buffer. `MAX_FRAMES_IN_FLIGHT` controls vertex copies and frame resources. `GraphicManager` also owns command resources, semaphores, fences, submission, and one device-local depth target matching the swapchain extent.
 
-`OpaquePass` owns the opaque graphics pipeline, pipeline layout, and camera push constant layouts. Its `record` overloads accept a static `MeshGpuData` or a `DynamicMeshGpuData` plus frame slot and camera matrices, select the appropriate vertex buffer, and record dynamic rendering, camera push constants, viewport/scissor setup, mesh buffer binding, and indexed drawing.
+`OpaquePass` owns the opaque graphics pipeline, pipeline layout, and camera push constant layouts. It receives a depth image view when recording and the selected depth format during construction; it does not own depth resources. Static and dynamic mesh record overloads select the vertex buffer, push camera data, bind color/depth attachments, set viewport/scissor, and draw indexed geometry.
 
-`RenderingManager.cpp` contains the temporary CPU quad data (4 vertices and 6 uint32 indices). `RenderingManager` owns the dynamic `m_testMesh`, creates it after the graphics resources and pass are constructed, and destroys it after waiting for the device to become idle, before member teardown. After waiting for the current frame fence and acquiring an image, it deforms a fresh copy of the original CPU positions using elapsed time and copies it into only the current slot. Colors and the six shared indices stay unchanged. It also owns the frame sequence: acquire swapchain image, update current-slot vertices, reset frame resources, transition image layouts, execute `OpaquePass`, submit, present, and advance the frame.
-
-```text
-temporary CPU quad
-        |
-        v
-GraphicManager::createDynamicMesh
-        |
-        v
-DynamicMeshGpuData (2 vertex buffers + 1 index buffer)
-        |
-        v
-wait slot fence -> update mapped vertices -> OpaquePass::record(slot)
-        |
-        v
-vkCmdDrawIndexed
-```
+`RenderingManager.cpp` contains an indexed cube: 8 shared colored vertices spanning [-0.5, 0.5] in X/Y/Z, and 36 uint32 indices (12 triangles). The front is drawn before the rear so correct visibility depends on depth testing, even with culling disabled. The cube is static, but continues through the dynamic mesh path. Each frame waits for the current slot fence before copying cube vertices into that slot. Destruction waits for the device to become idle before destroying the mesh; `GraphicManager` also waits before destroying its resources, including when later initialization fails.
 
 ## Prerequisites
 
-- Visual Studio 2026
-- Desktop development with C++
-- CMake
-- Git, used by CMake `FetchContent` to obtain GLFW
-- Windows SDK
-- Vulkan SDK
+- Visual Studio 2026 with Desktop development with C++
+- CMake, Git, Windows SDK, and Vulkan SDK
 
-This project uses Vulkan dynamic rendering for the first graphics pipeline milestone, so the Vulkan SDK must be installed and discoverable by CMake. The build also uses the Vulkan SDK `glslc` compiler to generate SPIR-V shaders.
+CMake fetches GLFW and uses the Vulkan SDK `glslc` to build SPIR-V. The renderer requires Vulkan dynamic rendering.
 
-## Generate Project
+## Generate and Build
 
-From any directory, run:
+Run `generate_vs2026.bat`, then open `build/VulkanEngine.slnx` and build the `VulkanSandbox` startup project. Alternatively, after generation:
 
 ```bat
-generate_vs2026.bat
+cmake --build build --config Debug
 ```
-
-The Visual Studio solution and all generated CMake files are written under:
-
-```text
-build/
-```
-
-## Build
-
-Open the generated solution in `build/` and build:
-
-```text
-VulkanSandbox
-```
-
-`VulkanSandbox` is configured as the Visual Studio startup project where supported.
 
 ## Expected Result
 
-Running the application opens a `1280 x 720` window named:
+A `1280 x 720` window named `Vulkan Mini Engine` displays a colored cube centered at the origin with camera-controlled perspective. Front surfaces hide rear surfaces, regardless of index order. There is no fake deformation, lighting, or texture. Closing the window shuts down cleanly.
+
+The dynamic mesh uses two persistently mapped vertex buffers and one shared index buffer. Frame updates write only after that slot is idle. Existing fences, semaphore waits/signals, frame indexing, presentation, and swapchain layout barriers remain unchanged.
+
+Debug builds enable `VK_LAYER_KHRONOS_validation`. For synchronization validation, launch with `VK_LAYER_VALIDATE_SYNC=1` in the process environment. The current swapchain acquire/layout barrier has a pre-existing synchronization-validation `WRITE_AFTER_READ` hazard: the submission waits at `COLOR_ATTACHMENT_OUTPUT`, while the incoming color barrier uses `TOP_OF_PIPE` as its source stage. This milestone preserves that barrier as requested; a follow-up must align the execution dependency. Missing Steam overlay/Fossilize layer manifests may also produce loader warnings on the development machine.
+
+## Camera and GPU Matrices
+
+`RenderingManager` owns a Vulkan-independent `Camera` and a reference to the longer-lived `Window`. Each frame it computes delta time with `std::chrono::steady_clock`, updates camera input, then runs the mesh/render sequence.
+
+The camera starts at `(0, 0, 3)`, yaw `-90` degrees, pitch `0`, looking toward negative Z. Speed is 3 units/second, mouse sensitivity 0.1 degrees per cursor unit, FOV 60 degrees, and near/far planes 0.1/1000. Forward comes from yaw/pitch; right is normalized `cross(forward, worldUp)` and up is normalized `cross(right, forward)`, with world up `(0, 1, 0)`.
+
+W/S approach/retreat, A/D strafe, and Q/E move vertically. Captured mouse movement rotates the view; pitch clamps to +/-89 degrees. The first mouse sample, including after focus returns, initializes cursor history without rotation. Escape closes the application.
+
+`Vertex` contains `float position[3]` and `float color[3]` (24 bytes). Both attributes use `VK_FORMAT_R32G32B32_SFLOAT`. `Mat4` stores column-major `elements[column * 4 + row]`, matching GLSL's explicit `column_major` layout. The right-handed projection uses negative-Z forward, Vulkan depth [0, 1], and inverted Y.
+
+`RenderingManager::recordFrame` builds identity model, view, and projection matrices using swapchain aspect ratio, rejecting an empty extent. `OpaquePass::recordMesh` pushes them after pipeline binding and before drawing. The vertex shader computes `projection * view * model * vec4(position, 1)`; fragment color interpolation is unchanged.
+
+`CameraPushConstants` contains three 64-byte matrices (192 bytes). `OpaquePass` checks `maxPushConstantsSize` before pipeline creation. Limits below 192 but at least 128 select view/projection only and an implicit identity model in a second shader variant. Smaller limits fail clearly. CMake builds both variants, and compile-time assertions verify CPU sizes/offsets. The tested RTX 3080 Laptop GPU reports 256 bytes and uses the 192-byte layout. No descriptors or uniform buffers are used.
+
+## Depth Buffer
+
+`GraphicManager` tests optimal-tiling depth attachment support in this order: `VK_FORMAT_D32_SFLOAT`, `VK_FORMAT_D32_SFLOAT_S8_UINT`, then `VK_FORMAT_D24_UNORM_S8_UINT`. It fails clearly if none is supported. The development GPU selects `VK_FORMAT_D32_SFLOAT` at 1280 x 720.
+
+The image is 2D, single-sampled, one mip/layer, with `VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT` and `VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT`. Its view selects the depth aspect. Before first use, `prepareDepthAttachment` transitions from `UNDEFINED` to `DEPTH_STENCIL_ATTACHMENT_OPTIMAL`. This combined layout avoids requiring the optional `separateDepthStencilLayouts` feature and works with all three candidate formats; stencil formats transition both aspects, while stencil testing remains disabled.
+
+Subsequent frames keep the same layout. A depth barrier orders the single shared image's previous writes against the next frame's depth reads/writes at early/late fragment tests. This prevents overlapping frame submissions from racing on the shared target without adding fences or changing the frame model.
+
+The pipeline declares the selected depth attachment format, enables depth test/write, and uses `VK_COMPARE_OP_LESS`. Dynamic rendering clears depth to `1.0`, uses `DONT_CARE` store, and retains the existing color attachment. Cleanup destroys the image view, image, then memory before device destruction. Partial initialization failures also release depth allocations.
 
 ```text
-Vulkan Mini Engine
+Camera -> view/projection ------------------+
+                                           v
+Cube -> per-frame vertices/shared indices -> OpaquePass
+                                           +-- swapchain color attachment
+                                           +-- shared depth attachment
+                                           |
+                                           v
+                                    vkCmdDrawIndexed
+                                           |
+                                           v
+                                    depth-tested 3D image
+                                           |
+                                           v
+                                         present
 ```
 
-The renderer clears the swapchain image and draws one continuously deforming, indexed, interpolated-color quad using a Vulkan graphics pipeline, two vertex buffers, and one shared index buffer. Each vertex allocation is mapped once during creation and unmapped once during destruction; frame updates only copy into mapped memory after that slot is idle. The index allocation is uploaded and unmapped once at creation. Closing the window shuts the application down cleanly.
-
-In a Debug build, startup also initializes the Vulkan instance, enables `VK_LAYER_KHRONOS_validation`, creates a `VkDebugUtilsMessengerEXT`, verifies and enables dynamic rendering, and creates the Vulkan surface, swapchain, command resources, synchronization objects, graphics pipeline, and dynamic quad buffers.
-
-## Camera Navigation
-
-`RenderingManager` owns a Vulkan-independent `Camera` and a reference to the longer-lived `Window`. Each frame it computes delta time with `std::chrono::steady_clock`, updates camera input, and then runs the existing dynamic mesh/render sequence.
-
-The camera stores position, yaw/pitch in degrees, movement speed (3 units/second), mouse sensitivity (0.1 degrees per cursor unit), FOV (60 degrees), near/far planes (0.1/1000), orientation vectors, and previous mouse coordinates. It starts at `(0, 0, 3)` with yaw `-90` and pitch `0`, looking toward negative Z. Forward comes from yaw/pitch; right is normalized `cross(forward, worldUp)` and up is normalized `cross(right, forward)`, with world up `(0, 1, 0)`.
-
-W/S move forward/back, A/D strafe, and Q/E move down/up along world up. Movement uses delta time. The cursor is captured while focused; mouse movement changes yaw/pitch, with pitch clamped to +/-89 degrees. The first mouse sample, including after focus returns, initializes cursor history without rotating. Escape closes the application.
-
-Minimal `Vec3` and column-major `Mat4` types avoid adding a math dependency. The view matrix is right-handed; the perspective matrix uses negative-Z forward, zero-to-one depth, and inverted Y for Vulkan. CPU storage is `elements[column * 4 + row]`, matching the shader's explicit `column_major` layout, so no transpose is needed.
-
-`Vertex` now contains `float position[3]` and `float color[3]` (24 bytes), with both attributes using `VK_FORMAT_R32G32B32_SFLOAT`. The quad stays at Z=0 and continues deforming in X/Y. Each frame, `RenderingManager::recordFrame` builds identity model, camera view, and projection matrices using the swapchain aspect ratio, rejecting an empty extent. `OpaquePass::recordMesh` pushes them after binding the pipeline and before drawing. The vertex shader computes `projection * view * model * vec4(position, 1)`; fragment color interpolation is unchanged. Navigation now transforms the scene through the shader: W approaches the quad, S retreats, A/D strafe, Q/E move vertically, and mouse look rotates the view.
-
-`CameraPushConstants` contains three consecutive 64-byte matrices (192 bytes). Before creating the pipeline, `OpaquePass` queries the selected physical device's `maxPushConstantsSize`. Devices supporting 192 bytes use all three matrices. Devices supporting only 128 bytes use `CameraViewProjectionPushConstants` (view/projection) and a shader variant with an implicit identity model; smaller limits fail clearly. CMake builds both shader variants from the same source. Compile-time assertions verify CPU sizes and offsets. The tested RTX 3080 Laptop GPU reports a 256-byte limit and selects the 192-byte layout. No descriptors, uniform buffers, depth attachments, or changes to frame synchronization are needed.
+Resize/recreation is not implemented. Future resizing must recreate the swapchain, swapchain views, depth image/memory/view, and possibly the pipeline if attachment formats change.
 
 ## Next Milestone
 
-Add a depth image, device memory, and image view; attach depth during dynamic rendering and enable depth testing/writes in `OpaquePass`. Then render a simple 3D cube and connect real 3D PhysiK surface geometry. Depth, PhysiK, lighting, materials, and textures are not implemented yet.
-
-The intended future pass order is:
-
-```text
-ShadowPass
-        |
-        v
-OpaquePass
-        |
-        v
-OverlayPass
-```
+Replace cube test data with PhysiK surface vertices and triangle indices, create the dynamic mesh, step PhysiK using delta time, and update the current frame's vertices before `OpaquePass::record` for live soft-body rendering. PhysiK, normals, lighting, materials, textures, and additional passes are not implemented in this milestone.

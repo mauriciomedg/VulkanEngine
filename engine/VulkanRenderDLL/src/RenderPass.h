@@ -18,7 +18,8 @@ public:
         VkCommandBuffer commandBuffer,
         uint32_t imageIndex,
         const MeshGpuData& mesh,
-        const CameraPushConstants& cameraData) = 0;
+        const CameraPushConstants& cameraData,
+        VkImageView depthImageView) = 0;
 };
 
 }

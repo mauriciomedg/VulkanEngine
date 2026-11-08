@@ -41,7 +41,7 @@ static_assert(offsetof(CameraViewProjectionPushConstants, projection) == 64);
 class OpaquePass final : public RenderPass
 {
 public:
-    explicit OpaquePass(VulkanContext& context);
+    OpaquePass(VulkanContext& context, VkFormat depthFormat);
     ~OpaquePass() override;
 
     OpaquePass(const OpaquePass&) = delete;
@@ -51,14 +51,16 @@ public:
         VkCommandBuffer commandBuffer,
         uint32_t imageIndex,
         const MeshGpuData& mesh,
-        const CameraPushConstants& cameraData) override;
+        const CameraPushConstants& cameraData,
+        VkImageView depthImageView) override;
 
     void record(
         VkCommandBuffer commandBuffer,
         uint32_t imageIndex,
         const DynamicMeshGpuData& mesh,
         uint32_t frameIndex,
-        const CameraPushConstants& cameraData);
+        const CameraPushConstants& cameraData,
+        VkImageView depthImageView);
 
 private:
     void recordMesh(
@@ -67,11 +69,13 @@ private:
         VkBuffer vertexBuffer,
         VkBuffer indexBuffer,
         uint32_t indexCount,
-        const CameraPushConstants& cameraData);
+        const CameraPushConstants& cameraData,
+        VkImageView depthImageView);
     void createGraphicsPipeline();
     VkShaderModule createShaderModule(const std::vector<char>& code) const;
 
     VulkanContext& m_context;
+    VkFormat m_depthFormat;
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     uint32_t m_cameraPushConstantSize = 0;
