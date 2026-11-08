@@ -2,6 +2,8 @@
 
 A small Windows C++ learning project for building toward Vulkan one milestone at a time.
 
+The offline asset path is now `Blender -> GLB -> GLBConverter -> .mesh -> MeshLoader -> MeshData -> GraphicManager -> MeshGpuData -> OpaquePass -> Vulkan`. See [the asset pipeline guide](docs/asset-pipeline.md) for the binary format, converter scope, tests, and manual Blender/Suzanne workflow.
+
 ## Architecture
 
 ```text
@@ -9,7 +11,7 @@ Renderer
     +-- Window
     +-- RenderingManager
             +-- Camera (CPU navigation and view/projection math)
-            +-- test DynamicMeshGpuData
+            +-- MeshLoader -> CPU MeshData -> static MeshGpuData
             +-- OpaquePass (pipeline, push constants, dynamic rendering)
             +-- GraphicManager
             |       +-- static and dynamic mesh resources
@@ -26,14 +28,14 @@ Renderer
 
 `OpaquePass` owns the opaque graphics pipeline, pipeline layout, and camera push constant layouts. It receives a depth image view when recording and the selected depth format during construction; it does not own depth resources. Static and dynamic mesh record overloads select the vertex buffer, push camera data, bind color/depth attachments, set viewport/scissor, and draw indexed geometry.
 
-`RenderingManager.cpp` contains an indexed cube: 8 shared colored vertices spanning [-0.5, 0.5] in X/Y/Z, and 36 uint32 indices (12 triangles). The front is drawn before the rear so correct visibility depends on depth testing, even with culling disabled. The cube is static, but continues through the dynamic mesh path. Each frame waits for the current slot fence before copying cube vertices into that slot. Destruction waits for the device to become idle before destroying the mesh; `GraphicManager` also waits before destroying its resources, including when later initialization fails.
+`RenderingManager` loads `test.mesh` through `MeshLoader`, then uploads CPU `MeshData` through `GraphicManager::createMesh(const MeshData&)`. It owns a static `MeshGpuData` and uses the existing static `OpaquePass::record` overload. The bundled development asset is an 8-vertex, 36-index colored cube converted offline from a self-authored GLB during the build. There is no hardcoded runtime cube data or per-frame upload for this static asset. The dynamic mesh infrastructure remains available. Destruction waits for the device to become idle before destroying the mesh; `GraphicManager` also waits before destroying its resources, including when later initialization fails.
 
 ## Prerequisites
 
 - Visual Studio 2026 with Desktop development with C++
 - CMake, Git, Windows SDK, and Vulkan SDK
 
-CMake fetches GLFW and uses the Vulkan SDK `glslc` to build SPIR-V. The renderer requires Vulkan dynamic rendering.
+CMake fetches GLFW and uses the Vulkan SDK `glslc` to build SPIR-V. The renderer requires Vulkan dynamic rendering. Vendored cgltf v1.15 is compiled only into the independent `GLBConverter` tool. Python is optional for asset-pipeline tests and sample regeneration.
 
 ## Generate and Build
 
@@ -45,9 +47,9 @@ cmake --build build --config Debug
 
 ## Expected Result
 
-A `1280 x 720` window named `Vulkan Mini Engine` displays a colored cube centered at the origin with camera-controlled perspective. Front surfaces hide rear surfaces, regardless of index order. There is no fake deformation, lighting, or texture. Closing the window shuts down cleanly.
+A `1280 x 720` window named `Vulkan Mini Engine` displays a loaded colored cube centered at the origin with camera-controlled perspective. Front surfaces hide rear surfaces, regardless of index order. The cube comes from `assets/models/test.glb`, converted by the build to `build/assets/models/test.mesh`, not from runtime GLB parsing. There is no fake deformation, lighting, or texture. Closing the window shuts down cleanly.
 
-The dynamic mesh uses two persistently mapped vertex buffers and one shared index buffer. Frame updates write only after that slot is idle. Existing fences, semaphore waits/signals, frame indexing, presentation, and swapchain layout barriers remain unchanged.
+The loaded static mesh uses one vertex buffer and one index buffer, uploaded once. The dynamic mesh path still supports two persistently mapped vertex buffers and one shared index buffer, with updates after the frame slot is idle. Existing fences, semaphore waits/signals, frame indexing, presentation, and swapchain layout barriers remain unchanged.
 
 Debug builds enable `VK_LAYER_KHRONOS_validation`. For synchronization validation, launch with `VK_LAYER_VALIDATE_SYNC=1` in the process environment. The current swapchain acquire/layout barrier has a pre-existing synchronization-validation `WRITE_AFTER_READ` hazard: the submission waits at `COLOR_ATTACHMENT_OUTPUT`, while the incoming color barrier uses `TOP_OF_PIPE` as its source stage. This milestone preserves that barrier as requested; a follow-up must align the execution dependency. Missing Steam overlay/Fossilize layer manifests may also produce loader warnings on the development machine.
 
@@ -76,24 +78,28 @@ Subsequent frames keep the same layout. A depth barrier orders the single shared
 The pipeline declares the selected depth attachment format, enables depth test/write, and uses `VK_COMPARE_OP_LESS`. Dynamic rendering clears depth to `1.0`, uses `DONT_CARE` store, and retains the existing color attachment. Cleanup destroys the image view, image, then memory before device destruction. Partial initialization failures also release depth allocations.
 
 ```text
-Camera -> view/projection ------------------+
-                                           v
-Cube -> per-frame vertices/shared indices -> OpaquePass
-                                           +-- swapchain color attachment
-                                           +-- shared depth attachment
-                                           |
-                                           v
-                                    vkCmdDrawIndexed
-                                           |
-                                           v
-                                    depth-tested 3D image
-                                           |
-                                           v
-                                         present
+GLB -> GLBConverter -> .mesh -> MeshLoader -> MeshData
+                                                |
+                                                v
+                        GraphicManager -> static vertex/index buffers
+                                                |
+                                                v
+Camera -> view/projection -----------------> OpaquePass
+                                                +-- swapchain color attachment
+                                                +-- shared depth attachment
+                                                |
+                                                v
+                                         vkCmdDrawIndexed
+                                                |
+                                                v
+                                         depth-tested 3D image
+                                                |
+                                                v
+                                              present
 ```
 
 Resize/recreation is not implemented. Future resizing must recreate the swapchain, swapchain views, depth image/memory/view, and possibly the pipeline if attachment formats change.
 
 ## Next Milestone
 
-Replace cube test data with PhysiK surface vertices and triangle indices, create the dynamic mesh, step PhysiK using delta time, and update the current frame's vertices before `OpaquePass::record` for live soft-body rendering. PhysiK, normals, lighting, materials, textures, and additional passes are not implemented in this milestone.
+Load a suitable surface mesh into CPU `MeshData`, extend it only if necessary for PhysiK, and create `DynamicMeshGpuData`. Initialize PhysiK from CPU geometry, step the simulation using delta time, and update the current frame's positions before `OpaquePass::record` for live soft-body rendering. PhysiK, normals, lighting, materials, textures, and additional passes are not implemented in this milestone.

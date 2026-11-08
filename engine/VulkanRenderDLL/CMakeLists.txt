@@ -65,6 +65,8 @@ add_library(VulkanRenderDLL SHARED
     src/GraphicManager.cpp
     src/GraphicManager.h
     src/MeshData.h
+    src/MeshLoader.cpp
+    src/MeshLoader.h
     src/OpaquePass.cpp
     src/OpaquePass.h
     src/RenderPass.h
@@ -82,6 +84,7 @@ target_compile_definitions(VulkanRenderDLL
         VULKAN_RENDER_EXPORTS
         $<$<CONFIG:Debug>:VULKAN_RENDER_ENABLE_VALIDATION_LAYERS>
         VULKAN_RENDER_SHADER_DIR="${VULKAN_RENDER_SHADER_OUTPUT_DIR}"
+        VULKAN_RENDER_ASSET_DIR="${VULKAN_ENGINE_ASSET_DIR}"
 )
 
 target_include_directories(VulkanRenderDLL
@@ -95,9 +98,10 @@ target_link_libraries(VulkanRenderDLL
     PRIVATE
         glfw
         Vulkan::Vulkan
+        MeshFormat
 )
 
-add_dependencies(VulkanRenderDLL VulkanRenderShaders)
+add_dependencies(VulkanRenderDLL VulkanRenderShaders VulkanEngineAssets)
 
 set_target_properties(VulkanRenderDLL PROPERTIES
     FOLDER "Engine"

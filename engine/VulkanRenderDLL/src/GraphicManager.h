@@ -31,6 +31,7 @@ public:
         size_t vertexCount,
         const uint32_t* indices,
         size_t indexCount);
+    MeshGpuData createMesh(const MeshData& mesh);
     void destroyMesh(MeshGpuData& mesh);
     DynamicMeshGpuData createDynamicMesh(
         const Vertex* vertices,

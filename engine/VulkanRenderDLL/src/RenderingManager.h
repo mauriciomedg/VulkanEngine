@@ -40,7 +40,7 @@ private:
     VulkanContext m_context;
     GraphicManager m_graphics;
     OpaquePass m_opaquePass;
-    DynamicMeshGpuData m_testMesh;
+    MeshGpuData m_testMesh;
     std::chrono::steady_clock::time_point m_previousFrameTime = std::chrono::steady_clock::now();
     bool m_loggedSuboptimalSwapchain = false;
 };

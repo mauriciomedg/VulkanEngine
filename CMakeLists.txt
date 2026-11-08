@@ -37,5 +37,13 @@ if(TARGET update_mappings)
     set_target_properties(update_mappings PROPERTIES FOLDER "Dependencies")
 endif()
 
+add_library(MeshFormat INTERFACE)
+target_include_directories(MeshFormat INTERFACE "${PROJECT_SOURCE_DIR}/engine/MeshFormat/include")
+add_subdirectory(tools/GLBConverter)
 add_subdirectory(engine/VulkanRenderDLL)
 add_subdirectory(apps/VulkanSandbox)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

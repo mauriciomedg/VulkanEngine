@@ -457,6 +457,12 @@ MeshGpuData GraphicManager::createMesh(
     return mesh;
 }
 
+MeshGpuData GraphicManager::createMesh(const MeshData& mesh)
+{
+    MeshFormat::validate(mesh);
+    return createMesh(mesh.vertices.data(), mesh.vertices.size(), mesh.indices.data(), mesh.indices.size());
+}
+
 void GraphicManager::destroyMesh(MeshGpuData& mesh)
 {
     const VkDevice device = m_context.getDevice();

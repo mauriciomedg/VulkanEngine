@@ -1,50 +1,25 @@
 #include "RenderingManager.h"
 
 #include "Window.h"
+#include "MeshLoader.h"
 
-#include <array>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 
 namespace VulkanRender
 {
-namespace
-{
-
-constexpr std::array<Vertex, 8> kCubeVertices = {{
-    {{-0.5f, -0.5f, 0.5f}, {1.0f, 0.1f, 0.1f}},
-    {{0.5f, -0.5f, 0.5f}, {0.1f, 1.0f, 0.1f}},
-    {{0.5f, 0.5f, 0.5f}, {0.1f, 0.3f, 1.0f}},
-    {{-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 0.1f}},
-    {{-0.5f, -0.5f, -0.5f}, {0.1f, 1.0f, 1.0f}},
-    {{0.5f, -0.5f, -0.5f}, {1.0f, 0.1f, 1.0f}},
-    {{0.5f, 0.5f, -0.5f}, {1.0f, 0.6f, 0.1f}},
-    {{-0.5f, 0.5f, -0.5f}, {0.6f, 0.2f, 1.0f}}
-}};
-
-// Front first, rear last: depth must reject the rear even though it is drawn later.
-constexpr std::array<uint32_t, 36> kCubeIndices = {
-    0, 1, 2, 2, 3, 0,
-    1, 5, 6, 6, 2, 1,
-    4, 0, 3, 3, 7, 4,
-    3, 2, 6, 6, 7, 3,
-    4, 5, 1, 1, 0, 4,
-    5, 4, 7, 7, 6, 5
-};
-
-}
-
 RenderingManager::RenderingManager(const Window& window)
     : m_window(window)
     , m_context(window)
     , m_graphics(m_context)
     , m_opaquePass(m_context, m_graphics.getDepthFormat())
 {
-    m_testMesh = m_graphics.createDynamicMesh(
-        kCubeVertices.data(),
-        kCubeVertices.size(),
-        kCubeIndices.data(),
-        kCubeIndices.size());
+    const auto path = std::filesystem::path(VULKAN_RENDER_ASSET_DIR) / "test.mesh";
+    const MeshData mesh = MeshLoader::load(path);
+    m_testMesh = m_graphics.createMesh(mesh);
+    std::cout << "Loaded mesh: " << path.string() << " (" << mesh.vertices.size()
+        << " vertices, " << mesh.indices.size() << " indices).\n";
 }
 
 RenderingManager::~RenderingManager()
@@ -53,7 +28,7 @@ RenderingManager::~RenderingManager()
     if (device != VK_NULL_HANDLE)
     {
         vkDeviceWaitIdle(device);
-        m_graphics.destroyDynamicMesh(m_testMesh);
+        m_graphics.destroyMesh(m_testMesh);
     }
 }
 
@@ -92,10 +67,6 @@ void RenderingManager::renderFrame()
     {
         throw std::runtime_error("Failed to acquire Vulkan swapchain image");
     }
-
-    // Only this frame slot is idle; other slots may still be read by the GPU.
-    m_graphics.updateDynamicMesh(m_testMesh, m_graphics.getCurrentFrameIndex(),
-        kCubeVertices.data(), kCubeVertices.size());
 
     m_graphics.resetCurrentFrameFence();
     m_graphics.resetCurrentCommandBuffer();
@@ -174,7 +145,7 @@ void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t image
 
     m_graphics.prepareDepthAttachment(commandBuffer);
     m_opaquePass.record(commandBuffer, imageIndex, m_testMesh,
-        m_graphics.getCurrentFrameIndex(), cameraData, m_graphics.getDepthImageView());
+        cameraData, m_graphics.getDepthImageView());
 
     transitionSwapchainImage(
         commandBuffer,

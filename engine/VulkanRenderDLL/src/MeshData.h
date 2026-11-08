@@ -3,17 +3,12 @@
 #include <array>
 #include <cstdint>
 #include <vulkan/vulkan.h>
+#include <MeshFormat.h>
 
 namespace VulkanRender
 {
 
 inline constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
-
-struct Vertex
-{
-    float position[3];
-    float color[3];
-};
 
 struct MeshGpuData
 {
