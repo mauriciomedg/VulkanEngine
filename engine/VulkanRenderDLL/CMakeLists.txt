@@ -101,7 +101,7 @@ target_link_libraries(VulkanRenderDLL
         MeshFormat
 )
 
-add_dependencies(VulkanRenderDLL VulkanRenderShaders VulkanEngineAssets)
+add_dependencies(VulkanRenderDLL VulkanRenderShaders)
 
 set_target_properties(VulkanRenderDLL PROPERTIES
     FOLDER "Engine"

@@ -39,9 +39,25 @@ endif()
 
 add_library(MeshFormat INTERFACE)
 target_include_directories(MeshFormat INTERFACE "${PROJECT_SOURCE_DIR}/engine/MeshFormat/include")
+# Match the deployed models directory without changing runtime renderer code.
+set(VULKAN_ENGINE_ASSET_DIR "$<TARGET_FILE_DIR:VulkanSandbox>/Assets/models")
 add_subdirectory(tools/GLBConverter)
 add_subdirectory(engine/VulkanRenderDLL)
 add_subdirectory(apps/VulkanSandbox)
+
+# The repository's source directory is lowercase assets/models. Preserve its
+# contents/casing inside the runtime Assets directory. Always copy on app builds,
+# including builds where only assets changed and the executable is up to date.
+# TARGET POST_BUILD cannot be attached here to a target created in a subdirectory.
+add_custom_target(VulkanEngineAssets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${PROJECT_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:VulkanSandbox>/Assets"
+    COMMENT "Copying runtime assets beside VulkanSandbox"
+    VERBATIM
+)
+set_target_properties(VulkanEngineAssets PROPERTIES FOLDER "Assets")
+add_dependencies(VulkanSandbox VulkanEngineAssets)
 
 include(CTest)
 if(BUILD_TESTING)

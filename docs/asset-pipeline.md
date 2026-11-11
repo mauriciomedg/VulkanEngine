@@ -38,18 +38,29 @@ nonzero. Parse, validation, unsupported content, and file I/O failures also retu
 nonzero with a diagnostic. Success prints input/output names and vertex, index,
 and triangle counts. Parent output directories must already exist.
 
-CMake converts the committed self-authored `assets/models/test.glb` cube into
-`build/assets/models/test.mesh`. `VulkanRenderDLL` depends on this asset target, so
-clean builds produce a runnable sample. Source and build directories are derived
-from CMake; no developer-specific asset path is embedded in source code. Like the
-existing shaders, the development asset location is a generated compile definition,
-so launching from another working directory works. Packaging a relocatable build
-is a future step.
+Conversion is an explicit offline operation. The committed sample
+`assets/models/test.mesh` was converted from the self-authored `test.glb` cube.
+To update it, run GLBConverter with `assets/models/test.mesh` as the output.
+Additional converted models, such as `assets/models/monkey.mesh`, belong in the same
+source tree. Builds do not regenerate or overwrite source meshes.
 
-To render your own converted model, write it to `build/assets/models/test.mesh`
-after building, then launch `VulkanSandbox`. A later rebuild can regenerate this
-development asset when the converter or source GLB changes. To make your model the
-reproducible default, replace `assets/models/test.glb` and rebuild instead.
+The root `CMakeLists.txt`, after declaring VulkanSandbox, owns the single
+`VulkanEngineAssets` deployment target. It copies the entire existing source
+`assets` tree into `$<TARGET_FILE_DIR:VulkanSandbox>/Assets` on every app build.
+It preserves the existing lowercase `models` subdirectory; no folders are invented.
+This always-run dependency also deploys newly added files when the executable does
+not relink. The app-local POST_BUILD rule still copies only VulkanRenderDLL.
+
+CMake configures the runtime models path as
+`$<TARGET_FILE_DIR:VulkanSandbox>/Assets/models`; renderer source is unchanged and
+launching from another working directory works. Paths derive from the target and
+project directories, without hardcoded developer or configuration paths. Full
+relocatable packaging remains a future step.
+
+To change the default rendered model, convert it to `assets/models/test.mesh`,
+build VulkanSandbox to deploy it, then launch. Adding another model to the source
+tree deploys it without editing CMake, but does not change the renderer's selection
+of `test.mesh`. See [the deployment investigation](asset-deployment.md).
 
 ## Supported subset
 
@@ -82,7 +93,8 @@ data could otherwise be ignored.
 3. Triangulate for a controlled first test if needed.
 4. Export glTF Binary (`.glb`), with geometry and optional vertex colors. Disable
    animation, skinning, morphs, instancing, and compression. Avoid material extensions.
-5. Build, convert to `build/assets/models/test.mesh`, then launch the sandbox.
+5. Build GLBConverter, convert to `assets/models/test.mesh`, build VulkanSandbox,
+   then launch the sandbox.
 6. Use WASD/QE and mouse look to inspect the model and depth occlusion. Without
    lighting, an uncolored curved model uses flat neutral color; vertex colors help.
 

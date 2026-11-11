@@ -28,7 +28,7 @@ Renderer
 
 `OpaquePass` owns the opaque graphics pipeline, pipeline layout, and camera push constant layouts. It receives a depth image view when recording and the selected depth format during construction; it does not own depth resources. Static and dynamic mesh record overloads select the vertex buffer, push camera data, bind color/depth attachments, set viewport/scissor, and draw indexed geometry.
 
-`RenderingManager` loads `test.mesh` through `MeshLoader`, then uploads CPU `MeshData` through `GraphicManager::createMesh(const MeshData&)`. It owns a static `MeshGpuData` and uses the existing static `OpaquePass::record` overload. The bundled development asset is an 8-vertex, 36-index colored cube converted offline from a self-authored GLB during the build. There is no hardcoded runtime cube data or per-frame upload for this static asset. The dynamic mesh infrastructure remains available. Destruction waits for the device to become idle before destroying the mesh; `GraphicManager` also waits before destroying its resources, including when later initialization fails.
+`RenderingManager` loads `test.mesh` through `MeshLoader`, then uploads CPU `MeshData` through `GraphicManager::createMesh(const MeshData&)`. It owns a static `MeshGpuData` and uses the existing static `OpaquePass::record` overload. The bundled development asset is an 8-vertex, 36-index colored cube converted offline from a self-authored GLB and committed as a source asset. There is no hardcoded runtime cube data or per-frame upload for this static asset. The dynamic mesh infrastructure remains available. Destruction waits for the device to become idle before destroying the mesh; `GraphicManager` also waits before destroying its resources, including when later initialization fails.
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ cmake --build build --config Debug
 
 ## Expected Result
 
-A `1280 x 720` window named `Vulkan Mini Engine` displays a loaded colored cube centered at the origin with camera-controlled perspective. Front surfaces hide rear surfaces, regardless of index order. The cube comes from `assets/models/test.glb`, converted by the build to `build/assets/models/test.mesh`, not from runtime GLB parsing. There is no fake deformation, lighting, or texture. Closing the window shuts down cleanly.
+A `1280 x 720` window named `Vulkan Mini Engine` displays a loaded colored cube centered at the origin with camera-controlled perspective. Front surfaces hide rear surfaces, regardless of index order. The cube comes from the committed `assets/models/test.mesh`, deployed with the entire source asset tree to `Assets` beside VulkanSandbox by the root CMake rule. Models retain their existing lowercase `models` directory. The renderer does not parse GLB. See [asset deployment](docs/asset-deployment.md) for the investigation and exact paths. There is no fake deformation, lighting, or texture. Closing the window shuts down cleanly.
 
 The loaded static mesh uses one vertex buffer and one index buffer, uploaded once. The dynamic mesh path still supports two persistently mapped vertex buffers and one shared index buffer, with updates after the frame slot is idle. Existing fences, semaphore waits/signals, frame indexing, presentation, and swapchain layout barriers remain unchanged.
 
