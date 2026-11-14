@@ -15,7 +15,7 @@ RenderingManager::RenderingManager(const Window& window)
     , m_graphics(m_context)
     , m_opaquePass(m_context, m_graphics.getDepthFormat())
 {
-    const auto path = std::filesystem::path(VULKAN_RENDER_ASSET_DIR) / "test.mesh";
+    const auto path = std::filesystem::path(VULKAN_RENDER_ASSET_DIR) / "monkey.mesh";
     const MeshData mesh = MeshLoader::load(path);
     m_testMesh = m_graphics.createMesh(mesh);
     std::cout << "Loaded mesh: " << path.string() << " (" << mesh.vertices.size()
