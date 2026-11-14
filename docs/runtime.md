@@ -25,19 +25,19 @@ GLFW, or Vulkan header. It is non-copyable and exports its API with
 convention and private `SINGULARITY_ENGINE_RUNTIME_EXPORTS` definition.
 
 Renderer continues to own Window and RenderingManager. Default window configuration
-is unchanged: 1280 x 720, title Vulkan Mini Engine. Destruction releases the renderer
+is 1280 x 720, with base title SingularityEngine. Destruction releases the renderer
 and graphics resources before the window through the existing ownership order.
 No new configuration system is needed for this milestone.
 
 The existing Renderer public facade now exposes `shouldClose()` and `runFrame()`.
 The latter polls events then calls RenderingManager::renderFrame(), exactly as the
-old loop body did. Renderer::run() remains available and delegates to these methods.
+old loop body did, and returns its existing frame delta in seconds. Renderer::run() remains available and delegates to these methods.
 The runtime controls when a frame runs without accessing RenderingManager, Vulkan
 handles, passes, command buffers, or barriers directly.
 
 `runFrame()` intentionally has no dt parameter: GraphicsEngine retains its existing
-steady-clock camera/frame timing. Moving that timing or passing unused dt would be
-an unrelated change. The host creates the runtime, runs the loop, and handles fatal
+steady-clock camera/frame timing. That delta now returns through the Renderer facade for runtime performance statistics,
+without adding a second clock or changing camera timing. The host creates the runtime, runs the loop, and handles fatal
 exceptions. Application source no longer includes or calls GraphicsEngine.
 
 ```text
@@ -98,3 +98,33 @@ validation was not enabled; its previously documented issue remains unchanged.
 All GraphicsEngine implementation files except the public Renderer facade, all shaders,
 MeshFormat, GLBConverter, and source assets were compared against the preceding commit
 and are unchanged. No runtime headers are included by GraphicsEngine.
+
+## Window-title frame statistics
+
+SingularityEngineRuntime owns the elapsed-time accumulator and completed frame count.
+After each successful graphics frame, it samples the existing delta returned by
+Renderer::runFrame(). Non-finite, zero, and negative deltas are ignored. Startup
+samples cannot trigger a title update until at least 0.5 seconds have accumulated.
+
+At each interval, FPS = frame count / accumulated seconds, and average frame time
+in milliseconds = accumulated seconds * 1000 / frame count. The runtime formats
+`SingularityEngine | XXX.X FPS | X.XX ms` with fixed precision (one FPS decimal,
+two millisecond decimals), then resets both accumulators. String formatting and OS
+title updates occur only at this interval, not every frame. The base title is
+SingularityEngine until the first sample interval completes.
+
+Renderer::setWindowTitle forwards the string to Window::setTitle, which alone calls
+glfwSetWindowTitle. No GLFW handle is exposed to the runtime. The display is enabled
+in both Debug and Release, with no framebuffer text, UI pass, or logging per frame.
+
+These values measure CPU-observed completed frame-loop frequency and average frame
+time, not GPU execution time. Future Vulkan timestamp queries could provide GPU
+frame time and then per-pass GPU timing; neither is implemented here.
+
+Debug and Release builds and asset tests pass in `build/fps-title-check`. An observed
+Debug title was `SingularityEngine | 119.8 FPS | 8.35 ms`; repeated window-title
+samples held the same text across several frames between interval updates. Camera,
+Lambert shading, depth, mesh loading, and the F1 wireframe toggle remain functional.
+The Debug validation run reports only the previously documented Steam manifest
+warnings, with no rendering validation errors. The regular build's pre-existing
+Debug PDB could not be overwritten during verification; the fresh output avoids it.

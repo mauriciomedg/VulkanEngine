@@ -2,6 +2,7 @@
 
 #include "Export.h"
 #include <memory>
+#include <cstdint>
 
 namespace VulkanRender
 {
@@ -26,7 +27,11 @@ public:
     void runFrame();
 
 private:
+    void updatePerformanceTitle(float deltaTime);
+
     std::unique_ptr<VulkanRender::Renderer> m_graphics;
+    double m_fpsAccumulator = 0.0;
+    uint64_t m_fpsFrameCount = 0;
 };
 
 }

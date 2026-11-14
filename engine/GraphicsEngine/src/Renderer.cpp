@@ -9,7 +9,7 @@ namespace VulkanRender
 {
 
 Renderer::Renderer()
-    : m_window(std::make_unique<Window>(1280, 720, "Vulkan Mini Engine"))
+    : m_window(std::make_unique<Window>(1280, 720, "SingularityEngine"))
     , m_renderingManager(std::make_unique<RenderingManager>(*m_window))
 {
 }
@@ -31,10 +31,15 @@ bool Renderer::shouldClose() const
     return m_window->shouldClose();
 }
 
-void Renderer::runFrame()
+float Renderer::runFrame()
 {
     m_window->pollEvents();
-    m_renderingManager->renderFrame();
+    return m_renderingManager->renderFrame();
+}
+
+void Renderer::setWindowTitle(const std::string& title)
+{
+    m_window->setTitle(title);
 }
 
 }

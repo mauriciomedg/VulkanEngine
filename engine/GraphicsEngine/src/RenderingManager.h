@@ -22,7 +22,8 @@ public:
     RenderingManager(const RenderingManager&) = delete;
     RenderingManager& operator=(const RenderingManager&) = delete;
 
-    void renderFrame();
+    // Returns the existing CPU frame delta after completing the frame loop.
+    float renderFrame();
 
 private:
     void recordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex);

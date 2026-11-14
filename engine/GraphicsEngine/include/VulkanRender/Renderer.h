@@ -3,6 +3,7 @@
 #include "Export.h"
 
 #include <memory>
+#include <string>
 
 namespace VulkanRender
 {
@@ -22,7 +23,9 @@ public:
     void run();
     // Single-frame facade for hosts that orchestrate multiple engine subsystems.
     bool shouldClose() const;
-    void runFrame();
+    // Returns GraphicsEngine's existing frame delta in seconds.
+    float runFrame();
+    void setWindowTitle(const std::string& title);
 
 private:
     std::unique_ptr<Window> m_window;

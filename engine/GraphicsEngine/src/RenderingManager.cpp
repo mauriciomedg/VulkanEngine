@@ -50,7 +50,7 @@ RenderingManager::~RenderingManager()
     }
 }
 
-void RenderingManager::renderFrame()
+float RenderingManager::renderFrame()
 {
     const auto now = std::chrono::steady_clock::now();
     const float deltaTime = std::chrono::duration<float>(now - m_previousFrameTime).count();
@@ -127,6 +127,7 @@ void RenderingManager::renderFrame()
     }
 
     m_graphics.advanceFrame();
+    return deltaTime;
 }
 
 void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t imageIndex)

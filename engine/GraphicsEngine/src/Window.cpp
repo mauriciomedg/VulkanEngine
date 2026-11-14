@@ -46,6 +46,11 @@ void Window::pollEvents() const
     glfwPollEvents();
 }
 
+void Window::setTitle(const std::string& title)
+{
+    glfwSetWindowTitle(m_window, title.c_str());
+}
+
 std::pair<int, int> Window::getFramebufferSize() const
 {
     int width = 0;

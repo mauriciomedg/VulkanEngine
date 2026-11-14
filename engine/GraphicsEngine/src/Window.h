@@ -19,6 +19,7 @@ public:
 
     bool shouldClose() const;
     void pollEvents() const;
+    void setTitle(const std::string& title);
     std::pair<int, int> getFramebufferSize() const;
     GLFWwindow* getNativeHandle() const;
 
