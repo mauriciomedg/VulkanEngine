@@ -1,6 +1,6 @@
 add_executable(MeshLoaderCheck MeshLoaderCheck.cpp
-    "${PROJECT_SOURCE_DIR}/engine/VulkanRenderDLL/src/MeshLoader.cpp")
-target_include_directories(MeshLoaderCheck PRIVATE "${PROJECT_SOURCE_DIR}/engine/VulkanRenderDLL/src")
+    "${PROJECT_SOURCE_DIR}/engine/GraphicsEngine/src/MeshLoader.cpp")
+target_include_directories(MeshLoaderCheck PRIVATE "${PROJECT_SOURCE_DIR}/engine/GraphicsEngine/src")
 target_link_libraries(MeshLoaderCheck PRIVATE MeshFormat)
 set_target_properties(MeshLoaderCheck PROPERTIES FOLDER "Tests")
 

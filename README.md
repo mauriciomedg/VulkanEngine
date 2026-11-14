@@ -4,6 +4,25 @@ A small Windows C++ learning project for building toward Vulkan one milestone at
 
 The offline asset path is now `Blender -> GLB -> GLBConverter -> .mesh -> MeshLoader -> MeshData -> GraphicManager -> MeshGpuData -> OpaquePass -> Vulkan`. See [the asset pipeline guide](docs/asset-pipeline.md) for the binary format, converter scope, tests, and manual Blender/Suzanne workflow.
 
+The graphics subsystem is the shared `GraphicsEngine` library, producing
+`GraphicsEngine.dll`. `VulkanSandbox` links to it and deploys the DLL beside the
+executable. The public `VulkanRender::Renderer` API and `VulkanRender/Renderer.h`
+include remain unchanged; Vulkan is still the implementation inside the subsystem.
+
+The intended dependency direction is application to independent engine subsystems:
+`VulkanSandbox -> GraphicsEngine` today. Future applications may depend on
+GraphicsEngine, PhysiK, and ScriptEngine independently. No physics or scripting
+subsystem or dependency is implemented by this naming milestone.
+
+```text
+engine/
+  GraphicsEngine/
+    VulkanContext, GraphicManager, RenderingManager, OpaquePass, WireframePass
+  MeshFormat/        (Vulkan-independent)
+  PhysiK/            (future)
+  ScriptEngine/      (future)
+```
+
 ## Architecture
 
 ```text
@@ -21,7 +40,7 @@ Renderer
             +-- VulkanContext (device and swapchain state)
 ```
 
-`VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `VulkanRenderDLL` behind that boundary.
+`VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `GraphicsEngine` behind that boundary.
 
 `VulkanContext` owns the instance, validation messenger, surface, physical/logical device, queues, swapchain, images, image views, format, extent, and swapchain image layouts.
 

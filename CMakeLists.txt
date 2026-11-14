@@ -42,7 +42,7 @@ target_include_directories(MeshFormat INTERFACE "${PROJECT_SOURCE_DIR}/engine/Me
 # Match the deployed models directory without changing runtime renderer code.
 set(VULKAN_ENGINE_ASSET_DIR "$<TARGET_FILE_DIR:VulkanSandbox>/Assets/models")
 add_subdirectory(tools/GLBConverter)
-add_subdirectory(engine/VulkanRenderDLL)
+add_subdirectory(engine/GraphicsEngine)
 add_subdirectory(apps/VulkanSandbox)
 
 # The repository's source directory is lowercase assets/models. Preserve its

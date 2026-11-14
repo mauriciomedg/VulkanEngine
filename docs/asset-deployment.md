@@ -26,7 +26,7 @@ set_target_properties(VulkanEngineAssets PROPERTIES FOLDER "Tools")
 
 The source was `assets/models/test.glb`; the output was
 `${PROJECT_BINARY_DIR}/assets/models/test.mesh`, not an executable-relative asset
-folder. `engine/VulkanRenderDLL/CMakeLists.txt` declared the DLL's dependency on
+folder. `engine/GraphicsEngine/CMakeLists.txt` declared the DLL's dependency on
 `VulkanEngineAssets` and supplied `VULKAN_RENDER_ASSET_DIR` from that generated
 directory. Building VulkanSandbox built its linked DLL, which built the asset
 target. The runtime loaded this file directly from the build tree. Generated
@@ -67,7 +67,7 @@ files, so remove old deployment output when a pristine package is needed.
 
 Regenerate and clean/rebuild VulkanSandbox. Check `Assets/models/test.mesh` and
 `Assets/models/monkey.mesh` beneath the target output against their source hashes,
-and VulkanRenderDLL.dll against the built DLL. Add a temporary source asset and
+and GraphicsEngine.dll against the built DLL. Add a temporary source asset and
 build the already up-to-date app again: the new asset must deploy without CMake
 edits or relinking. Also build another configuration to check the target-derived
 destination. Renderer code, pipeline, and asset format are unchanged.

@@ -76,7 +76,7 @@ PhysiK, or pass scheduler.
 
 ## Verification
 
-- Debug builds of VulkanRenderDLL, VulkanSandbox, GLBConverter, and MeshLoaderCheck pass.
+- Debug builds of GraphicsEngine, VulkanSandbox, GLBConverter, and MeshLoaderCheck pass.
 - CTest AssetPipeline passes all 73 process checks plus binary assertions, unchanged.
 - Both wireframe vertex variants and the fragment SPIR-V pass `spirv-val`.
 - RTX 3080 Laptop GPU reports fillModeNonSolid support; the device log confirms it

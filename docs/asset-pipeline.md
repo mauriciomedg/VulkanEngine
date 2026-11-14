@@ -49,7 +49,7 @@ The root `CMakeLists.txt`, after declaring VulkanSandbox, owns the single
 `assets` tree into `$<TARGET_FILE_DIR:VulkanSandbox>/Assets` on every app build.
 It preserves the existing lowercase `models` subdirectory; no folders are invented.
 This always-run dependency also deploys newly added files when the executable does
-not relink. The app-local POST_BUILD rule still copies only VulkanRenderDLL.
+not relink. The app-local POST_BUILD rule still copies only GraphicsEngine.
 
 CMake configures the runtime models path as
 `$<TARGET_FILE_DIR:VulkanSandbox>/Assets/models`; renderer source is unchanged and
@@ -158,7 +158,7 @@ rather than hard-edge face normals. Both committed meshes use format version 2. 
 pre-existing swapchain-acquire synchronization-validation hazard and missing Steam
 layer warnings remain documented in the main README; this task does not change barriers.
 
-Debug verification for this milestone: GLBConverter, VulkanRenderDLL, VulkanSandbox,
+Debug verification for this milestone: GLBConverter, GraphicsEngine, VulkanSandbox,
 and MeshLoaderCheck build; CTest passes 73 process checks plus binary assertions.
 Both committed meshes load through MeshLoader. Suzanne renders with readable facial
 shading and depth occlusion; camera rotation preserves the surface lighting.

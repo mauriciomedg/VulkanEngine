@@ -10,7 +10,7 @@ namespace VulkanRender
 class RenderingManager;
 class Window;
 
-class VULKAN_RENDER_API Renderer
+class GRAPHICS_ENGINE_API Renderer
 {
 public:
     Renderer();

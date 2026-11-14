@@ -94,7 +94,7 @@ add_custom_command(
     COMMENT "Compiling 128-byte camera push constant vertex shader"
 )
 
-add_library(VulkanRenderDLL SHARED
+add_library(GraphicsEngine SHARED
     src/Camera.cpp
     src/Camera.h
     src/CameraPushConstants.h
@@ -119,31 +119,31 @@ add_library(VulkanRenderDLL SHARED
     src/Window.h
 )
 
-target_compile_definitions(VulkanRenderDLL
+target_compile_definitions(GraphicsEngine
     PRIVATE
-        VULKAN_RENDER_EXPORTS
+        GRAPHICS_ENGINE_EXPORTS
         $<$<CONFIG:Debug>:VULKAN_RENDER_ENABLE_VALIDATION_LAYERS>
         VULKAN_RENDER_SHADER_DIR="${VULKAN_RENDER_SHADER_OUTPUT_DIR}"
         VULKAN_RENDER_ASSET_DIR="${VULKAN_ENGINE_ASSET_DIR}"
 )
 
-target_include_directories(VulkanRenderDLL
+target_include_directories(GraphicsEngine
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(VulkanRenderDLL
+target_link_libraries(GraphicsEngine
     PRIVATE
         glfw
         Vulkan::Vulkan
         MeshFormat
 )
 
-add_dependencies(VulkanRenderDLL VulkanRenderShaders)
+add_dependencies(GraphicsEngine VulkanRenderShaders)
 
-set_target_properties(VulkanRenderDLL PROPERTIES
+set_target_properties(GraphicsEngine PROPERTIES
     FOLDER "Engine"
     WINDOWS_EXPORT_ALL_SYMBOLS OFF
 )

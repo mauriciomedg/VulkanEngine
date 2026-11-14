@@ -4,7 +4,7 @@ add_executable(VulkanSandbox
 
 target_link_libraries(VulkanSandbox
     PRIVATE
-        VulkanRenderDLL
+        GraphicsEngine
 )
 
 set_target_properties(VulkanSandbox PROPERTIES
@@ -13,7 +13,7 @@ set_target_properties(VulkanSandbox PROPERTIES
 
 add_custom_command(TARGET VulkanSandbox POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:VulkanRenderDLL>
+        $<TARGET_FILE:GraphicsEngine>
         $<TARGET_FILE_DIR:VulkanSandbox>
-    COMMENT "Copying VulkanRenderDLL beside VulkanSandbox"
+    COMMENT "Copying GraphicsEngine beside VulkanSandbox"
 )
