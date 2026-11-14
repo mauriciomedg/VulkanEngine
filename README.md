@@ -12,7 +12,8 @@ Renderer
     +-- RenderingManager
             +-- Camera (CPU navigation and view/projection math)
             +-- MeshLoader -> CPU MeshData -> static MeshGpuData
-            +-- OpaquePass (pipeline, push constants, dynamic rendering)
+            +-- OpaquePass (Lambert fill pipeline)
+            +-- WireframePass (triangle edge overlay pipeline)
             +-- GraphicManager
             |       +-- static and dynamic mesh resources
             |       +-- shared depth image, memory, and view
@@ -26,7 +27,7 @@ Renderer
 
 `GraphicManager` provides static and dynamic GPU mesh allocation with host-visible, coherent buffer memory. `DynamicMeshGpuData` has one persistently mapped vertex buffer per frame slot and one shared index buffer. `MAX_FRAMES_IN_FLIGHT` controls vertex copies and frame resources. `GraphicManager` also owns command resources, semaphores, fences, submission, and one device-local depth target matching the swapchain extent.
 
-`OpaquePass` owns the opaque graphics pipeline, pipeline layout, and camera push constant layouts. It receives a depth image view when recording and the selected depth format during construction; it does not own depth resources. Static and dynamic mesh record overloads select the vertex buffer, push camera data, bind color/depth attachments, set viewport/scissor, and draw indexed geometry.
+`RenderingManager` owns the shared dynamic rendering scope, color/depth attachment setup, and viewport/scissor. `OpaquePass` and `WireframePass` each own their graphics pipeline and layout, receive the selected depth format during construction, and draw the same buffers. Their static and dynamic mesh overloads bind the pipeline, push camera data, bind vertex/index buffers, and draw indexed geometry. Neither pass owns attachments or synchronization.
 
 `RenderingManager` loads `monkey.mesh` through `MeshLoader`, then uploads CPU `MeshData` through `GraphicManager::createMesh(const MeshData&)`. It owns a static `MeshGpuData` and uses the existing static `OpaquePass::record` overload. The runtime development model is Suzanne, converted offline to mesh v2 with imported normals. A self-authored colored cube fixture is also included. There is no hardcoded runtime cube data or per-frame upload for this static asset. The dynamic mesh infrastructure remains available. Destruction waits for the device to become idle before destroying the mesh; `GraphicManager` also waits before destroying its resources, including when later initialization fails.
 
@@ -47,7 +48,7 @@ cmake --build build --config Debug
 
 ## Expected Result
 
-A `1280 x 720` window named `Vulkan Mini Engine` displays Suzanne with directional Lambert lighting centered at the origin with camera-controlled perspective. Front surfaces hide rear surfaces, regardless of index order. The model comes from the committed `assets/models/monkey.mesh`, deployed with the entire source asset tree to `Assets` beside VulkanSandbox by the root CMake rule. Models retain their existing lowercase `models` directory. The renderer does not parse GLB. See [asset deployment](docs/asset-deployment.md) for the investigation and exact paths. Imported normals reveal the eye sockets, muzzle, cheeks, and ears using ambient plus diffuse lighting. Closing the window shuts down cleanly.
+A `1280 x 720` window named `Vulkan Mini Engine` displays Suzanne with directional Lambert lighting centered at the origin with camera-controlled perspective. Front surfaces hide rear surfaces, regardless of index order. The model comes from the committed `assets/models/monkey.mesh`, deployed with the entire source asset tree to `Assets` beside VulkanSandbox by the root CMake rule. Models retain their existing lowercase `models` directory. The renderer does not parse GLB. See [asset deployment](docs/asset-deployment.md) for the investigation and exact paths. Imported normals reveal the eye sockets, muzzle, cheeks, and ears using ambient plus diffuse lighting. Dark triangle edges overlay visible surfaces by default; F1 toggles the wireframe. See [wireframe details](docs/wireframe-pass.md). Closing the window shuts down cleanly.
 
 The loaded static mesh uses one vertex buffer and one index buffer, uploaded once. The dynamic mesh path still supports two persistently mapped vertex buffers and one shared index buffer, with updates after the frame slot is idle. Existing fences, semaphore waits/signals, frame indexing, presentation, and swapchain layout barriers remain unchanged.
 
@@ -59,7 +60,7 @@ Debug builds enable `VK_LAYER_KHRONOS_validation`. For synchronization validatio
 
 The camera starts at `(0, 0, 3)`, yaw `-90` degrees, pitch `0`, looking toward negative Z. Speed is 3 units/second, mouse sensitivity 0.1 degrees per cursor unit, FOV 60 degrees, and near/far planes 0.1/1000. Forward comes from yaw/pitch; right is normalized `cross(forward, worldUp)` and up is normalized `cross(right, forward)`, with world up `(0, 1, 0)`.
 
-W/S approach/retreat, A/D strafe, and Q/E move vertically. Captured mouse movement rotates the view; pitch clamps to +/-89 degrees. The first mouse sample, including after focus returns, initializes cursor history without rotation. Escape closes the application.
+W/S approach/retreat, A/D strafe, and Q/E move vertically. Captured mouse movement rotates the view; pitch clamps to +/-89 degrees. The first mouse sample, including after focus returns, initializes cursor history without rotation. F1 toggles the wireframe overlay on supported GPUs; quick taps toggle once and key repeats are ignored. Escape closes the application.
 
 `Vertex` contains `float position[3]`, `float normal[3]`, and `float color[3]` (36 bytes, offsets 0/12/24). Locations 0/1/2 respectively use `VK_FORMAT_R32G32B32_SFLOAT`. `Mat4` stores column-major `elements[column * 4 + row]`, matching GLSL's explicit `column_major` layout. The right-handed projection uses negative-Z forward, Vulkan depth [0, 1], and inverted Y.
 
@@ -102,4 +103,4 @@ Resize/recreation is not implemented. Future resizing must recreate the swapchai
 
 ## Next Milestone
 
-Load a suitable surface mesh into CPU `MeshData`, extend it only if necessary for PhysiK, and create `DynamicMeshGpuData`. Initialize PhysiK from CPU geometry, step the simulation using delta time, and update the current frame's positions before `OpaquePass::record` for live soft-body rendering. PhysiK, model/normal matrices, materials, textures, and additional passes are not implemented. See [asset pipeline lighting](docs/asset-pipeline.md#directional-lambert-lighting) for the current normals and lighting conventions.
+Load a suitable surface mesh into CPU `MeshData`, extend it only if necessary for PhysiK, and create `DynamicMeshGpuData`. Initialize PhysiK from CPU geometry, step the simulation using delta time, and update the current frame's positions before `OpaquePass::record` for live soft-body rendering. PhysiK, model/normal matrices, materials, textures, and further passes beyond opaque/wireframe are not implemented. See [asset pipeline lighting](docs/asset-pipeline.md#directional-lambert-lighting) for the current normals and lighting conventions.

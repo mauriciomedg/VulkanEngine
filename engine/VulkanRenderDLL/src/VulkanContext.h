@@ -38,6 +38,7 @@ public:
 
     VkPhysicalDevice getPhysicalDevice() const;
     VkDevice getDevice() const;
+    bool supportsWireframe() const { return m_fillModeNonSolid; }
     VkQueue getGraphicsQueue() const;
     VkQueue getPresentQueue() const;
     VkSwapchainKHR getSwapchain() const;
@@ -78,6 +79,7 @@ private:
     VkSurfaceKHR m_surface = VK_NULL_HANDLE;
     VkPhysicalDevice m_physicalDevice = VK_NULL_HANDLE;
     VkDevice m_device = VK_NULL_HANDLE;
+    bool m_fillModeNonSolid = false;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
     QueueFamilyIndices m_queueFamilyIndices;

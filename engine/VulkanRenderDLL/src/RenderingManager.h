@@ -3,6 +3,7 @@
 #include "Camera.h"
 #include "GraphicManager.h"
 #include "OpaquePass.h"
+#include "WireframePass.h"
 #include "VulkanContext.h"
 
 #include <chrono>
@@ -40,9 +41,11 @@ private:
     VulkanContext m_context;
     GraphicManager m_graphics;
     OpaquePass m_opaquePass;
+    WireframePass m_wireframePass;
     MeshGpuData m_testMesh;
     std::chrono::steady_clock::time_point m_previousFrameTime = std::chrono::steady_clock::now();
     bool m_loggedSuboptimalSwapchain = false;
+    bool m_wireframeEnabled = true;
 };
 
 }

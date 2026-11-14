@@ -3,6 +3,9 @@
 #include "Window.h"
 #include "MeshLoader.h"
 
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -14,16 +17,31 @@ RenderingManager::RenderingManager(const Window& window)
     , m_context(window)
     , m_graphics(m_context)
     , m_opaquePass(m_context, m_graphics.getDepthFormat())
+    , m_wireframePass(m_context, m_graphics.getDepthFormat())
 {
     const auto path = std::filesystem::path(VULKAN_RENDER_ASSET_DIR) / "monkey.mesh";
     const MeshData mesh = MeshLoader::load(path);
     m_testMesh = m_graphics.createMesh(mesh);
     std::cout << "Loaded mesh: " << path.string() << " (" << mesh.vertices.size()
         << " vertices, " << mesh.indices.size() << " indices).\n";
+
+    // Event-based input also catches quick taps processed in one glfwPollEvents call.
+    glfwSetWindowUserPointer(m_window.getNativeHandle(), this);
+    glfwSetKeyCallback(m_window.getNativeHandle(), [](GLFWwindow* window, int key, int, int action, int)
+    {
+        auto& manager = *static_cast<RenderingManager*>(glfwGetWindowUserPointer(window));
+        if (key == GLFW_KEY_F1 && action == GLFW_PRESS && manager.m_context.supportsWireframe())
+        {
+            manager.m_wireframeEnabled = !manager.m_wireframeEnabled;
+            std::cout << "Wireframe overlay: " << (manager.m_wireframeEnabled ? "ON" : "OFF") << '\n';
+        }
+    });
 }
 
 RenderingManager::~RenderingManager()
 {
+    glfwSetKeyCallback(m_window.getNativeHandle(), nullptr);
+    glfwSetWindowUserPointer(m_window.getNativeHandle(), nullptr);
     const VkDevice device = m_context.getDevice();
     if (device != VK_NULL_HANDLE)
     {
@@ -144,8 +162,58 @@ void RenderingManager::recordFrame(VkCommandBuffer commandBuffer, uint32_t image
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);
 
     m_graphics.prepareDepthAttachment(commandBuffer);
-    m_opaquePass.record(commandBuffer, imageIndex, m_testMesh,
-        cameraData, m_graphics.getDepthImageView());
+    VkClearColorValue clearColor = {};
+    clearColor.float32[0] = 0.05f;
+    clearColor.float32[1] = 0.10f;
+    clearColor.float32[2] = 0.20f;
+    clearColor.float32[3] = 1.0f;
+
+    VkRenderingAttachmentInfo colorAttachment = {};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.imageView = m_context.getSwapchainImageView(imageIndex);
+    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    colorAttachment.clearValue.color = clearColor;
+
+    VkRenderingAttachmentInfo depthAttachment{};
+    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    depthAttachment.imageView = m_graphics.getDepthImageView();
+    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depthAttachment.clearValue.depthStencil = {1.0f, 0};
+
+    VkRenderingInfo renderingInfo = {};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+    renderingInfo.renderArea.offset = {0, 0};
+    renderingInfo.renderArea.extent = m_context.getSwapchainExtent();
+    renderingInfo.layerCount = 1;
+    renderingInfo.colorAttachmentCount = 1;
+    renderingInfo.pColorAttachments = &colorAttachment;
+    renderingInfo.pDepthAttachment = &depthAttachment;
+
+    vkCmdBeginRendering(commandBuffer, &renderingInfo);
+
+    VkViewport viewport = {};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(extent.width);
+    viewport.height = static_cast<float>(extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+    scissor.offset = {0, 0};
+    scissor.extent = extent;
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+    m_opaquePass.record(commandBuffer, m_testMesh, cameraData);
+    if (m_wireframeEnabled)
+        m_wireframePass.record(commandBuffer, m_testMesh, cameraData);
+
+    vkCmdEndRendering(commandBuffer);
 
     transitionSwapchainImage(
         commandBuffer,

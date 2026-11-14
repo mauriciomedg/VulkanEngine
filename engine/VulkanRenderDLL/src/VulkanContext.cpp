@@ -538,6 +538,9 @@ void VulkanContext::pickPhysicalDevice()
 
         const bool extensionsSupported = checkDeviceExtensionSupport(devices[i]);
         const bool dynamicRenderingSupported = supportsDynamicRendering(devices[i]);
+        VkPhysicalDeviceFeatures features{};
+        vkGetPhysicalDeviceFeatures(devices[i], &features);
+        std::cout << "  fillModeNonSolid: " << (features.fillModeNonSolid ? "yes" : "no") << '\n';
         const bool suitable = isDeviceSuitable(devices[i]);
         QueueFamilyIndices indices = findQueueFamilies(devices[i], true);
 
@@ -566,6 +569,11 @@ void VulkanContext::pickPhysicalDevice()
 
     m_physicalDevice = bestDevice;
     m_queueFamilyIndices = bestIndices;
+    VkPhysicalDeviceFeatures selectedFeatures{};
+    vkGetPhysicalDeviceFeatures(m_physicalDevice, &selectedFeatures);
+    m_fillModeNonSolid = selectedFeatures.fillModeNonSolid == VK_TRUE;
+    if (!m_fillModeNonSolid)
+        std::cerr << "Warning: fillModeNonSolid unsupported; WireframePass disabled.\n";
 
     VkPhysicalDeviceProperties selectedProperties = {};
     vkGetPhysicalDeviceProperties(m_physicalDevice, &selectedProperties);
@@ -642,6 +650,8 @@ void VulkanContext::createLogicalDevice()
     }
 
     VkPhysicalDeviceFeatures deviceFeatures = {};
+    deviceFeatures.fillModeNonSolid = m_fillModeNonSolid ? VK_TRUE : VK_FALSE;
+    // wideLines remains disabled; WireframePass uses lineWidth = 1.0f.
 
     VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = {};
     dynamicRenderingFeatures.sType =
@@ -664,6 +674,7 @@ void VulkanContext::createLogicalDevice()
     }
 
     std::cout << "Logical device created.\n";
+    std::cout << "fillModeNonSolid enabled: " << (m_fillModeNonSolid ? "yes" : "no") << '\n';
     std::cout << "Dynamic rendering enabled.\n";
 
     vkGetDeviceQueue(m_device, *m_queueFamilyIndices.graphicsFamily, 0, &m_graphicsQueue);

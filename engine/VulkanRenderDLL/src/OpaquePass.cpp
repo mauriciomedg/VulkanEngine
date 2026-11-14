@@ -73,68 +73,30 @@ OpaquePass::~OpaquePass()
 
 void OpaquePass::record(
     VkCommandBuffer commandBuffer,
-    uint32_t imageIndex,
     const MeshGpuData& mesh,
-    const CameraPushConstants& cameraData,
-    VkImageView depthImageView)
+    const CameraPushConstants& cameraData)
 {
-    recordMesh(commandBuffer, imageIndex, mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount,
-        cameraData, depthImageView);
+    recordMesh(commandBuffer, mesh.vertexBuffer, mesh.indexBuffer, mesh.indexCount,
+        cameraData);
 }
 
 void OpaquePass::record(
     VkCommandBuffer commandBuffer,
-    uint32_t imageIndex,
     const DynamicMeshGpuData& mesh,
     uint32_t frameIndex,
-    const CameraPushConstants& cameraData,
-    VkImageView depthImageView)
+    const CameraPushConstants& cameraData)
 {
-    recordMesh(commandBuffer, imageIndex, mesh.vertexBuffers.at(frameIndex),
-        mesh.indexBuffer, mesh.indexCount, cameraData, depthImageView);
+    recordMesh(commandBuffer, mesh.vertexBuffers.at(frameIndex),
+        mesh.indexBuffer, mesh.indexCount, cameraData);
 }
 
 void OpaquePass::recordMesh(
     VkCommandBuffer commandBuffer,
-    uint32_t imageIndex,
     VkBuffer vertexBuffer,
     VkBuffer indexBuffer,
     uint32_t indexCount,
-    const CameraPushConstants& cameraData,
-    VkImageView depthImageView)
+    const CameraPushConstants& cameraData)
 {
-    VkClearColorValue clearColor = {};
-    clearColor.float32[0] = 0.05f;
-    clearColor.float32[1] = 0.10f;
-    clearColor.float32[2] = 0.20f;
-    clearColor.float32[3] = 1.0f;
-
-    VkRenderingAttachmentInfo colorAttachment = {};
-    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    colorAttachment.imageView = m_context.getSwapchainImageView(imageIndex);
-    colorAttachment.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    colorAttachment.clearValue.color = clearColor;
-
-    VkRenderingAttachmentInfo depthAttachment{};
-    depthAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    depthAttachment.imageView = depthImageView;
-    depthAttachment.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    depthAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depthAttachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depthAttachment.clearValue.depthStencil = {1.0f, 0};
-
-    VkRenderingInfo renderingInfo = {};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    renderingInfo.renderArea.offset = {0, 0};
-    renderingInfo.renderArea.extent = m_context.getSwapchainExtent();
-    renderingInfo.layerCount = 1;
-    renderingInfo.colorAttachmentCount = 1;
-    renderingInfo.pColorAttachments = &colorAttachment;
-    renderingInfo.pDepthAttachment = &depthAttachment;
-
-    vkCmdBeginRendering(commandBuffer, &renderingInfo);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
 
     if (m_cameraPushConstantSize == sizeof(CameraPushConstants))
@@ -150,21 +112,6 @@ void OpaquePass::recordMesh(
             0, m_cameraPushConstantSize, &reducedData);
     }
 
-    const VkExtent2D extent = m_context.getSwapchainExtent();
-    VkViewport viewport = {};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(extent.width);
-    viewport.height = static_cast<float>(extent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-    VkRect2D scissor = {};
-    scissor.offset = {0, 0};
-    scissor.extent = extent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
     VkBuffer vertexBuffers[] = {
         vertexBuffer
     };
@@ -174,8 +121,6 @@ void OpaquePass::recordMesh(
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
-
-    vkCmdEndRendering(commandBuffer);
 }
 
 void OpaquePass::createGraphicsPipeline()

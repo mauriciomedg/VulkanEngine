@@ -17,6 +17,9 @@ set(VULKAN_RENDER_SHADER_OUTPUTS
     "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.vert.spv"
     "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.camera128.vert.spv"
     "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/triangle.frag.spv"
+    "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.vert.spv"
+    "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.camera128.vert.spv"
+    "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.frag.spv"
 )
 
 add_custom_command(
@@ -41,6 +44,40 @@ add_custom_command(
     COMMENT "Compiling triangle fragment shader"
 )
 
+add_custom_command(
+    OUTPUT "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.vert.spv"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${VULKAN_RENDER_SHADER_OUTPUT_DIR}"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}"
+        "${VULKAN_RENDER_SHADER_SOURCE_DIR}/wireframe.vert"
+        -o "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.vert.spv"
+    DEPENDS "${VULKAN_RENDER_SHADER_SOURCE_DIR}/wireframe.vert"
+    VERBATIM
+    COMMENT "Compiling wireframe.vert.spv"
+)
+
+add_custom_command(
+    OUTPUT "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.camera128.vert.spv"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${VULKAN_RENDER_SHADER_OUTPUT_DIR}"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}"
+        -DCAMERA_IDENTITY_MODEL=1
+        "${VULKAN_RENDER_SHADER_SOURCE_DIR}/wireframe.vert"
+        -o "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.camera128.vert.spv"
+    DEPENDS "${VULKAN_RENDER_SHADER_SOURCE_DIR}/wireframe.vert"
+    VERBATIM
+    COMMENT "Compiling wireframe.camera128.vert.spv"
+)
+
+add_custom_command(
+    OUTPUT "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.frag.spv"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${VULKAN_RENDER_SHADER_OUTPUT_DIR}"
+    COMMAND "${Vulkan_GLSLC_EXECUTABLE}"
+        "${VULKAN_RENDER_SHADER_SOURCE_DIR}/wireframe.frag"
+        -o "${VULKAN_RENDER_SHADER_OUTPUT_DIR}/wireframe.frag.spv"
+    DEPENDS "${VULKAN_RENDER_SHADER_SOURCE_DIR}/wireframe.frag"
+    VERBATIM
+    COMMENT "Compiling wireframe.frag.spv"
+)
+
 add_custom_target(VulkanRenderShaders
     DEPENDS ${VULKAN_RENDER_SHADER_OUTPUTS}
 )
@@ -60,6 +97,7 @@ add_custom_command(
 add_library(VulkanRenderDLL SHARED
     src/Camera.cpp
     src/Camera.h
+    src/CameraPushConstants.h
     include/VulkanRender/Export.h
     include/VulkanRender/Renderer.h
     src/GraphicManager.cpp
@@ -69,6 +107,8 @@ add_library(VulkanRenderDLL SHARED
     src/MeshLoader.h
     src/OpaquePass.cpp
     src/OpaquePass.h
+    src/WireframePass.cpp
+    src/WireframePass.h
     src/RenderPass.h
     src/Renderer.cpp
     src/RenderingManager.cpp
