@@ -9,6 +9,25 @@
 
 namespace
 {
+const cgltf_accessor* requireNormals(const cgltf_primitive& primitive)
+{
+    const cgltf_accessor* positions = nullptr;
+    const cgltf_accessor* normals = nullptr;
+    for (size_t i = 0; i < primitive.attributes_count; ++i)
+    {
+        const auto& attribute = primitive.attributes[i];
+        if (attribute.type == cgltf_attribute_type_position) positions = attribute.data;
+        if (attribute.type == cgltf_attribute_type_normal) normals = attribute.data;
+    }
+    if (!normals) throw std::runtime_error("Mesh has no NORMAL attribute");
+    if (normals->type != cgltf_type_vec3 || normals->component_type != cgltf_component_type_r_32f
+        || normals->is_sparse || !normals->buffer_view || normals->normalized)
+        throw std::runtime_error("Unsupported NORMAL accessor format; non-sparse float VEC3 required");
+    if (positions && normals->count != positions->count)
+        throw std::runtime_error("POSITION/NORMAL accessor counts must match");
+    return normals;
+}
+
 void requireSuccess(cgltf_result result, const char* operation)
 {
     if (result != cgltf_result_success)
@@ -58,6 +77,10 @@ VulkanRender::MeshData convert(const char* input)
         std::cerr << "Warning: materials and textures are ignored; only vertex/default RGB colors are used.\n";
 
     requireSuccess(cgltf_load_buffers(&options, data.get(), input), "Failed to load GLB buffers");
+    // Diagnose NORMAL metadata before generic validation; read only after validation.
+    for (size_t m = 0; m < data->meshes_count; ++m)
+        for (size_t p = 0; p < data->meshes[m].primitives_count; ++p)
+            requireNormals(data->meshes[m].primitives[p]);
     requireSuccess(cgltf_validate(data.get()), "Invalid GLB data");
     MeshData mesh;
     for (size_t meshIndex = 0; meshIndex < data->meshes_count; ++meshIndex)
@@ -71,11 +94,13 @@ VulkanRender::MeshData convert(const char* input)
             if (primitive.has_draco_mesh_compression || primitive.targets_count)
                 throw std::runtime_error("Draco compression and morph targets are unsupported");
             const cgltf_accessor* positions = nullptr;
+            const cgltf_accessor* normals = requireNormals(primitive);
             const cgltf_accessor* colors = nullptr;
             for (size_t i = 0; i < primitive.attributes_count; ++i)
             {
                 const auto& attribute = primitive.attributes[i];
                 if (attribute.type == cgltf_attribute_type_position) positions = attribute.data;
+                else if (attribute.type == cgltf_attribute_type_normal) continue;
                 else if (attribute.type == cgltf_attribute_type_color && attribute.index == 0) colors = attribute.data;
                 else std::cerr << "Warning: ignoring attribute " << attribute.name << ".\n";
             }
@@ -102,9 +127,21 @@ VulkanRender::MeshData convert(const char* input)
             const auto baseVertex = static_cast<uint32_t>(mesh.vertices.size());
             for (size_t i = 0; i < positions->count; ++i)
             {
-                Vertex vertex{{}, {0.8f, 0.8f, 0.8f}};
+                Vertex vertex{{}, {}, {0.8f, 0.8f, 0.8f}};
                 if (!cgltf_accessor_read_float(positions, i, vertex.position, 3))
                     throw std::runtime_error("Failed to read POSITION accessor");
+                if (!cgltf_accessor_read_float(normals, i, vertex.normal, 3))
+                    throw std::runtime_error("Failed to read NORMAL accessor");
+                // Double intermediates avoid overflow for finite float components.
+                double lengthSquared = 0.0;
+                for (float value : vertex.normal)
+                {
+                    if (!std::isfinite(value)) throw std::runtime_error("Non-finite NORMAL component");
+                    lengthSquared += double(value) * value;
+                }
+                const double length = std::sqrt(lengthSquared);
+                if (length <= 1e-8) throw std::runtime_error("NORMAL length is too small");
+                for (float& value : vertex.normal) value = static_cast<float>(value / length);
                 if (colors)
                 {
                     float rgba[4]{};

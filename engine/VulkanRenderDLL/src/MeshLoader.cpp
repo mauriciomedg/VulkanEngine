@@ -1,5 +1,6 @@
 #include "MeshLoader.h"
 #include <fstream>
+#include <string>
 
 namespace VulkanRender
 {
@@ -12,7 +13,9 @@ MeshData MeshLoader::load(const std::filesystem::path& path)
     if (length < 0) throw std::runtime_error("Failed to determine mesh file size");
     stream.seekg(0);
     if (readUint32(stream) != Magic) throw std::runtime_error("Invalid mesh magic");
-    if (readUint32(stream) != Version) throw std::runtime_error("Unsupported mesh version");
+    const uint32_t version = readUint32(stream);
+    if (version != Version) throw std::runtime_error("Unsupported mesh version: "
+        + std::to_string(version) + ", expected " + std::to_string(Version));
     const uint32_t vertexCount = readUint32(stream);
     const uint32_t indexCount = readUint32(stream);
     validateCounts(vertexCount, indexCount);
@@ -27,6 +30,7 @@ MeshData MeshLoader::load(const std::filesystem::path& path)
     for (auto& vertex : mesh.vertices)
     {
         for (float& value : vertex.position) value = readFloat(stream);
+        for (float& value : vertex.normal) value = readFloat(stream);
         for (float& value : vertex.color) value = readFloat(stream);
     }
     for (auto& index : mesh.indices) index = readUint32(stream);

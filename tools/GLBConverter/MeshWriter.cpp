@@ -14,6 +14,7 @@ void writeMesh(const std::filesystem::path& path, const VulkanRender::MeshData& 
     for (const auto& vertex : mesh.vertices)
     {
         for (float value : vertex.position) writeFloat(stream, value);
+        for (float value : vertex.normal) writeFloat(stream, value);
         for (float value : vertex.color) writeFloat(stream, value);
     }
     for (uint32_t index : mesh.indices) writeUint32(stream, index);

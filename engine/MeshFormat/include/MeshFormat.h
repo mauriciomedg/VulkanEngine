@@ -17,6 +17,7 @@ namespace VulkanRender
 struct Vertex
 {
     float position[3];
+    float normal[3];
     float color[3];
 };
 
@@ -28,12 +29,12 @@ struct MeshData
 
 namespace MeshFormat
 {
-// Disk order: 4 little-endian uint32 header fields, six IEEE-754 floats per
-// vertex (XYZ, RGB), then little-endian uint32 indices. No native struct dumps.
+// Disk order: 4 little-endian uint32 header fields, nine IEEE-754 floats per
+// vertex (XYZ position, XYZ normal, RGB), then little-endian uint32 indices. No native struct dumps.
 inline constexpr uint32_t Magic = 0x4853454d; // bytes "MESH"
-inline constexpr uint32_t Version = 1;
+inline constexpr uint32_t Version = 2;
 inline constexpr uint64_t HeaderBytes = 16;
-inline constexpr uint64_t VertexBytes = 24;
+inline constexpr uint64_t VertexBytes = 36;
 inline constexpr uint32_t MaxVertices = 4'000'000;
 inline constexpr uint32_t MaxIndices = 12'000'000;
 
@@ -47,7 +48,9 @@ struct MeshFileHeader
 
 static_assert(sizeof(float) == 4 && std::numeric_limits<float>::is_iec559);
 static_assert(sizeof(Vertex) == VertexBytes);
-static_assert(offsetof(Vertex, color) == 12);
+static_assert(offsetof(Vertex, position) == 0);
+static_assert(offsetof(Vertex, normal) == 12);
+static_assert(offsetof(Vertex, color) == 24);
 static_assert(std::is_standard_layout_v<Vertex> && std::is_trivially_copyable_v<Vertex>);
 static_assert(sizeof(MeshFileHeader) == HeaderBytes);
 
@@ -67,6 +70,8 @@ inline void validate(const MeshData& mesh)
     {
         for (float value : vertex.position)
             if (!std::isfinite(value)) throw std::runtime_error("Non-finite mesh position");
+        for (float value : vertex.normal)
+            if (!std::isfinite(value)) throw std::runtime_error("Non-finite mesh normal");
         for (float value : vertex.color)
             if (!std::isfinite(value)) throw std::runtime_error("Non-finite mesh color");
     }
