@@ -20,11 +20,21 @@ void Renderer::run()
 {
     std::cout << "Starting Vulkan frame loop.\n";
 
-    while (!m_window->shouldClose())
+    while (!shouldClose())
     {
-        m_window->pollEvents();
-        m_renderingManager->renderFrame();
+        runFrame();
     }
+}
+
+bool Renderer::shouldClose() const
+{
+    return m_window->shouldClose();
+}
+
+void Renderer::runFrame()
+{
+    m_window->pollEvents();
+    m_renderingManager->renderFrame();
 }
 
 }

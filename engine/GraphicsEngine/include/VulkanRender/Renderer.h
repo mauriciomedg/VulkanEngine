@@ -20,6 +20,9 @@ public:
     Renderer& operator=(const Renderer&) = delete;
 
     void run();
+    // Single-frame facade for hosts that orchestrate multiple engine subsystems.
+    bool shouldClose() const;
+    void runFrame();
 
 private:
     std::unique_ptr<Window> m_window;

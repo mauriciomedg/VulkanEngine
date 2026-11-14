@@ -1,4 +1,4 @@
-#include <VulkanRender/Renderer.h>
+#include <Singularity/SingularityEngineRuntime.h>
 
 #include <exception>
 #include <iostream>
@@ -7,8 +7,11 @@ int main()
 {
     try
     {
-        VulkanRender::Renderer renderer;
-        renderer.run();
+        Singularity::SingularityEngineRuntime engine;
+        while (!engine.shouldClose())
+        {
+            engine.runFrame();
+        }
     }
     catch (const std::exception& e)
     {

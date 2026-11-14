@@ -43,6 +43,7 @@ target_include_directories(MeshFormat INTERFACE "${PROJECT_SOURCE_DIR}/engine/Me
 set(VULKAN_ENGINE_ASSET_DIR "$<TARGET_FILE_DIR:VulkanSandbox>/Assets/models")
 add_subdirectory(tools/GLBConverter)
 add_subdirectory(engine/GraphicsEngine)
+add_subdirectory(engine/SingularityEngineRuntime)
 add_subdirectory(apps/VulkanSandbox)
 
 # The repository's source directory is lowercase assets/models. Preserve its

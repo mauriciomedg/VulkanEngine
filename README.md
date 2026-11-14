@@ -4,29 +4,32 @@ A small Windows C++ learning project for building toward Vulkan one milestone at
 
 The offline asset path is now `Blender -> GLB -> GLBConverter -> .mesh -> MeshLoader -> MeshData -> GraphicManager -> MeshGpuData -> OpaquePass -> Vulkan`. See [the asset pipeline guide](docs/asset-pipeline.md) for the binary format, converter scope, tests, and manual Blender/Suzanne workflow.
 
-The graphics subsystem is the shared `GraphicsEngine` library, producing
-`GraphicsEngine.dll`. `VulkanSandbox` links to it and deploys the DLL beside the
-executable. The public `VulkanRender::Renderer` API and `VulkanRender/Renderer.h`
-include remain unchanged; Vulkan is still the implementation inside the subsystem.
+`SingularityEngineRuntime` is the shared top-level orchestrator. `VulkanSandbox`
+uses its public API and links only to the runtime; the runtime privately links to
+`GraphicsEngine`. Both DLLs deploy beside the app. The runtime owns the existing
+`VulkanRender::Renderer` facade, which retains ownership of the window and graphics
+resources. See [runtime architecture](docs/runtime.md) for the API and frame flow.
 
-The intended dependency direction is application to independent engine subsystems:
-`VulkanSandbox -> GraphicsEngine` today. Future applications may depend on
-GraphicsEngine, PhysiK, and ScriptEngine independently. No physics or scripting
-subsystem or dependency is implemented by this naming milestone.
+The dependency direction is `VulkanSandbox -> SingularityEngineRuntime -> GraphicsEngine`.
+Future PhysiK, ScriptEngine, and AnimationEngine subsystems will be coordinated by
+the runtime. They are documented only and are not implemented or linked today.
 
 ```text
 engine/
+  SingularityEngineRuntime/
   GraphicsEngine/
     VulkanContext, GraphicManager, RenderingManager, OpaquePass, WireframePass
   MeshFormat/        (Vulkan-independent)
   PhysiK/            (future)
   ScriptEngine/      (future)
+  AnimationEngine/   (future)
 ```
 
 ## Architecture
 
 ```text
-Renderer
+VulkanSandbox -> SingularityEngineRuntime -> GraphicsEngine
+Renderer (owned by runtime)
     +-- Window
     +-- RenderingManager
             +-- Camera (CPU navigation and view/projection math)
@@ -40,7 +43,7 @@ Renderer
             +-- VulkanContext (device and swapchain state)
 ```
 
-`VulkanSandbox` only knows about the public `VulkanRender::Renderer` API. Windowing and Vulkan objects are owned by `GraphicsEngine` behind that boundary.
+`VulkanSandbox` only knows about `Singularity::SingularityEngineRuntime`. The runtime uses the public `VulkanRender::Renderer` facade; windowing and Vulkan objects remain owned inside `GraphicsEngine`.
 
 `VulkanContext` owns the instance, validation messenger, surface, physical/logical device, queues, swapchain, images, image views, format, extent, and swapchain image layouts.
 
